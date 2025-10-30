@@ -55,6 +55,17 @@ This repository contains battle-tested interview preparation materials for ML/AI
   - CNN components
 - **[ML Coding Problems](ml-coding-problems.ipynb)** - Practice problems with solutions
 
+#### Decision Trees
+- **[Decision Trees Complete Guide](decision-trees-complete-guide.md)** - Complete guide to decision trees:
+  - Tree construction algorithms (CART, ID3, C4.5)
+  - Splitting criteria (Entropy, Gini, Information Gain)
+  - Pruning techniques (pre-pruning, post-pruning)
+  - Regression trees and variance reduction
+  - Feature importance (MDI, permutation)
+  - Tree visualization methods
+  - Implementation from scratch
+  - 25+ interview questions with answers
+
 #### Ensemble Methods
 - **[Bagging Ensemble Methods](bagging-ensemble-methods-guide.md)** - Bootstrap Aggregating complete guide:
   - Bootstrap sampling, OOB error

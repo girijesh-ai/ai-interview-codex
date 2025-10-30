@@ -490,7 +490,7 @@ Input: Training data (X, y), loss function L, M iterations
       Fₘ(x) = Fₘ₋₁(x) + η·γₘ·fₘ(x)
       # η is learning rate
 
-3. Return FₘX)
+3. Return Fₘ(x)
 ```
 
 ### Residual Learning
