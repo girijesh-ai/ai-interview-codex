@@ -38,7 +38,7 @@ You have **4 back-to-back interviews** starting Oct 21. This schedule balances:
   - Problem 1: Linear Search (15 min)
   - Problem 2: Binary Search (30 min) ⭐ CRITICAL
   - Problem 3: First/Last Position (30 min)
-- [ ] ML Coding: ml-coding-problems.md
+- [ ] ML Coding: ml/ml-coding-problems.md
   - Problem 5: Confusion Matrix (20 min)
 
 **Evening (1 hour)**
@@ -94,7 +94,7 @@ You have **4 back-to-back interviews** starting Oct 21. This schedule balances:
 - [ ] Pattern recognition: Identify which problems use which patterns
 
 **Afternoon (2-3 hours)**
-- [ ] System Design: system-design-examples.md
+- [ ] System Design: system-design/system-design-examples.md
   - Study Example 1: Cybersecurity Threat Detection (60 min)
   - This is YOUR LLM security platform story!
   - Draw the architecture diagram from memory
@@ -292,7 +292,7 @@ You have **4 back-to-back interviews** starting Oct 21. This schedule balances:
 ### Oct 24: Round 4 - Ranjan Sinha (System Design)
 
 **Morning Prep (2 hours before)**
-- [ ] Review system-design-examples.md
+- [ ] Review system-design/system-design-examples.md
   - Example 1: Threat Detection (your domain!)
   - Focus on architecture, trade-offs
 - [ ] Review RAG system design

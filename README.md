@@ -15,48 +15,43 @@ This repository contains battle-tested interview preparation materials for ML/AI
 ## Quick Start
 
 ### For ML Coding Interviews
-1. Start with [ML Coding Interview Master Guide](ML-CODING-INTERVIEW-MASTER-GUIDE.md)
-2. Practice with [ML Algorithms from Scratch](ml-algorithms-from-scratch.ipynb)
-3. Review [Neural Network Components](neural-network-components-from-scratch.ipynb)
+1. Start with [ML Coding Interview Master Guide](ml/ML-CODING-INTERVIEW-MASTER-GUIDE.md)
+2. Practice with [ML Algorithms from Scratch](ml/ml-algorithms-from-scratch.ipynb)
+3. Review [Neural Network Components](deep-learning/neural-network-components-from-scratch.ipynb)
 
 ### For System Design Interviews
-1. Read [LLM/ML System Design Master Guide](LLM-ML-SYSTEM-DESIGN-MASTER-GUIDE.md)
+1. Read [LLM/ML System Design Master Guide](gen-ai/LLM-ML-SYSTEM-DESIGN-MASTER-GUIDE.md)
 2. Study iterative examples:
    - [Agentic AI Customer Support](agentic-ai/agentic-ai-iterative-interview.md)
    - [AI Code Review System](agentic-ai/code-review-ai-iterative-interview.md)
-3. Review [System Design Examples](system-design-examples-enhanced.md)
+3. Review [System Design Examples](system-design/system-design-examples-enhanced.md)
 
 ### For LLM/GenAI Roles
-1. [LLM Production Complete Guide](llm-production-complete-guide.md)
-2. [Production RAG Systems](production-rag-systems-guide.md)
-3. [Embedding Models Guide](embedding-models-comprehensive-guide.md)
-4. [LoRA/QLoRA Fine-tuning](lora-qlora-finetuning-guide.ipynb)
+1. [LLM Production Complete Guide](gen-ai/llm-production-complete-guide.md)
+2. [Production RAG Systems](gen-ai/production-rag-systems-guide.md)
+3. [Embedding Models Guide](gen-ai/embedding-models-comprehensive-guide.md)
+4. [LoRA/QLoRA Fine-tuning](gen-ai/lora-qlora-finetuning-guide.ipynb)
 
 ### For MLOps/Production ML
-1. [MLOps Production Guide](mlops-production-ml-guide.md)
-2. [Feature Engineering Guide](feature-engineering-guide.md)
+1. [MLOps Production Guide](ml/mlops-production-ml-guide.md)
+2. [Feature Engineering Guide](ml/feature-engineering-guide.md)
 
 ## Complete Content Index
 
 ### Machine Learning Fundamentals
 
 #### ML Coding & Algorithms
-- **[ML Coding Interview Master Guide](ML-CODING-INTERVIEW-MASTER-GUIDE.md)** - Complete guide to ML coding interviews
-- **[ML Algorithms from Scratch](ml-algorithms-from-scratch.ipynb)** - Implement core ML algorithms:
+- **[ML Coding Interview Master Guide](ml/ML-CODING-INTERVIEW-MASTER-GUIDE.md)** - Complete guide to ML coding interviews
+- **[ML Algorithms from Scratch](ml/ml-algorithms-from-scratch.ipynb)** - Implement core ML algorithms:
   - Linear Regression, Logistic Regression
   - Decision Trees, Random Forest
   - K-Means, KNN
   - Naive Bayes, SVM
   - Gradient Descent variants
-- **[Neural Network Components](neural-network-components-from-scratch.ipynb)** - Build neural networks from scratch:
-  - Dense layers, activation functions
-  - Backpropagation, optimizers (SGD, Adam, RMSprop)
-  - Batch normalization, dropout
-  - CNN components
-- **[ML Coding Problems](ml-coding-problems.ipynb)** - Practice problems with solutions
+- **[ML Coding Problems](ml/ml-coding-problems.ipynb)** - Practice problems with solutions
 
 #### Decision Trees
-- **[Decision Trees Complete Guide](decision-trees-complete-guide.md)** - Complete guide to decision trees:
+- **[Decision Trees Complete Guide](ml/decision-trees-complete-guide.md)** - Complete guide to decision trees:
   - Tree construction algorithms (CART, ID3, C4.5)
   - Splitting criteria (Entropy, Gini, Information Gain)
   - Pruning techniques (pre-pruning, post-pruning)
@@ -67,13 +62,13 @@ This repository contains battle-tested interview preparation materials for ML/AI
   - 25+ interview questions with answers
 
 #### Ensemble Methods
-- **[Bagging Ensemble Methods](bagging-ensemble-methods-guide.md)** - Bootstrap Aggregating complete guide:
+- **[Bagging Ensemble Methods](ml/bagging-ensemble-methods-guide.md)** - Bootstrap Aggregating complete guide:
   - Bootstrap sampling, OOB error
   - Random Forest deep dive
   - Variance reduction mechanism
   - Implementation from scratch
   - 20+ interview questions with answers
-- **[Boosting Ensemble Methods](boosting-ensemble-methods-guide.md)** - Boosting algorithms complete guide:
+- **[Boosting Ensemble Methods](ml/boosting-ensemble-methods-guide.md)** - Boosting algorithms complete guide:
   - AdaBoost, Gradient Boosting
   - XGBoost, LightGBM, CatBoost
   - Bias reduction mechanism
@@ -81,44 +76,56 @@ This repository contains battle-tested interview preparation materials for ML/AI
   - 25+ interview questions with answers
 
 #### Production ML & MLOps
-- **[MLOps Production Guide](mlops-production-ml-guide.md)** - End-to-end ML in production:
+- **[MLOps Production Guide](ml/mlops-production-ml-guide.md)** - End-to-end ML in production:
   - Model versioning, experiment tracking
   - CI/CD for ML, model deployment
   - Monitoring, A/B testing
   - Data pipelines, feature stores
-- **[Feature Engineering Guide](feature-engineering-guide.md)** - Feature engineering techniques:
+- **[Feature Engineering Guide](ml/feature-engineering-guide.md)** - Feature engineering techniques:
   - Numerical, categorical, text features
   - Time series, embeddings
   - Feature selection, dimensionality reduction
 
-### LLM & Generative AI
+### Deep Learning & Neural Networks
 
-#### LLM Fundamentals
-- **[LLM Production Complete Guide](llm-production-complete-guide.md)** - Production LLMs:
-  - Model selection, deployment strategies
-  - Cost optimization, caching
-  - Prompt engineering, fine-tuning
-  - Evaluation metrics
-- **[Attention Mechanisms Guide](attention-mechanisms-comprehensive-guide.md)** - Deep dive into attention:
+- **[Neural Network Components](deep-learning/neural-network-components-from-scratch.ipynb)** - Build neural networks from scratch:
+  - Dense layers, activation functions
+  - Backpropagation, optimizers (SGD, Adam, RMSprop)
+  - Batch normalization, dropout
+  - CNN components
+- **[Attention Mechanisms Guide](deep-learning/attention-mechanisms-comprehensive-guide.md)** - Deep dive into attention:
   - Self-attention, multi-head attention
   - Transformer architecture
   - Positional encoding
   - BERT, GPT architectures
+- **[Transformer Architecture Complete Guide](deep-learning/transformer-architecture-complete-guide.md)** - Transformer fundamentals:
+  - Encoder-only, Decoder-only, Encoder-Decoder
+  - Pretraining & Post-training (SFT, RLHF, DPO, PPO)
+  - Scaling laws
+
+### LLM & Generative AI
+
+#### LLM Fundamentals
+- **[LLM Production Complete Guide](gen-ai/llm-production-complete-guide.md)** - Production LLMs:
+  - Model selection, deployment strategies
+  - Cost optimization, caching
+  - Prompt engineering, fine-tuning
+  - Evaluation metrics
 
 #### Fine-tuning & Optimization
-- **[LoRA/QLoRA Fine-tuning](lora-qlora-finetuning-guide.ipynb)** - Parameter-efficient fine-tuning:
+- **[LoRA/QLoRA Fine-tuning](gen-ai/lora-qlora-finetuning-guide.ipynb)** - Parameter-efficient fine-tuning:
   - LoRA, QLoRA concepts
   - Implementation examples
   - Quantization techniques
   - Memory optimization
 
 #### RAG & Embeddings
-- **[Production RAG Systems](production-rag-systems-guide.md)** - Building RAG systems:
+- **[Production RAG Systems](gen-ai/production-rag-systems-guide.md)** - Building RAG systems:
   - Document chunking, indexing
   - Hybrid search, re-ranking
   - Evaluation (Ragas, TruLens)
   - Advanced RAG patterns
-- **[Embedding Models Guide](embedding-models-comprehensive-guide.md)** - Embeddings in depth:
+- **[Embedding Models Guide](gen-ai/embedding-models-comprehensive-guide.md)** - Embeddings in depth:
   - Model selection (OpenAI, Cohere, sentence-transformers)
   - Semantic search, clustering
   - Fine-tuning embeddings
@@ -127,7 +134,7 @@ This repository contains battle-tested interview preparation materials for ML/AI
 ### System Design
 
 #### LLM/ML System Design
-- **[LLM/ML System Design Master Guide](LLM-ML-SYSTEM-DESIGN-MASTER-GUIDE.md)** - Complete framework:
+- **[LLM/ML System Design Master Guide](gen-ai/LLM-ML-SYSTEM-DESIGN-MASTER-GUIDE.md)** - Complete framework:
   - Interview approach (45-minute structure)
   - Key patterns (RAG, agents, fine-tuning)
   - Production considerations
@@ -153,7 +160,7 @@ This repository contains battle-tested interview preparation materials for ML/AI
   - Semantic caching (40-70% cost reduction)
 
 #### Traditional System Design
-- **[System Design Examples Enhanced](system-design-examples-enhanced.md)** - ML system designs:
+- **[System Design Examples Enhanced](system-design/system-design-examples-enhanced.md)** - ML system designs:
   - Threat detection system
   - Semantic search
   - Network anomaly detection
