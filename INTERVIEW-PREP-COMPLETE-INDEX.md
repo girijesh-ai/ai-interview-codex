@@ -8,19 +8,19 @@
 
 ### Core ML/AI Technical Documents (COMPLETE ✓)
 
-1. **transformer-architecture-complete-guide.md** (41K)
+1. **deep-learning/transformer-architecture-complete-guide.md** (41K)
    - Transformer fundamentals
    - Encoder-only, Decoder-only, Encoder-Decoder
    - Pretraining & Post-training (SFT, RLHF, DPO, PPO)
    - Scaling laws
 
-2. **attention-mechanisms-comprehensive-guide.md** (43K)
+2. **deep-learning/attention-mechanisms-comprehensive-guide.md** (43K)
    - Scaled dot-product attention
    - MHA, MQA, GQA
    - RoPE, ALiBi, Flash Attention 1/2/3
    - Sparse attention patterns
 
-3. **embedding-models-comprehensive-guide.md** (50K)
+3. **gen-ai/embedding-models-comprehensive-guide.md** (50K)
    - SBERT architecture
    - Pooling strategies
    - Contrastive learning & loss functions
@@ -28,7 +28,7 @@
    - MTEB benchmark
    - Production usage
 
-4. **lora-qlora-finetuning-guide.ipynb** (64K)
+4. **gen-ai/lora-qlora-finetuning-guide.ipynb** (64K)
    - LoRA/QLoRA/DoRA theory
    - PEFT methods comparison
    - Practical fine-tuning with Qwen 2.5
@@ -36,7 +36,7 @@
    - Hyperparameter optimization
    - Gemma vs Qwen comparison
 
-5. **production-rag-systems-guide.md** (67K) ⭐
+5. **gen-ai/production-rag-systems-guide.md** (67K) ⭐
    - RAG architecture patterns (Naive → Advanced → Agentic → GraphRAG)
    - Hybrid search & reranking
    - Query expansion & compression
@@ -46,7 +46,7 @@
    - Production best practices
    - Complete implementation code
 
-6. **llm-production-complete-guide.md** (82K) - COMPLETE
+6. **gen-ai/llm-production-complete-guide.md** (82K) - COMPLETE
    - vLLM vs TGI serving (23x throughput improvement)
    - Continuous batching & PagedAttention (55% KV cache reduction)
    - Quantization (GPTQ, AWQ, GGUF) - 3-4x speedup
@@ -58,14 +58,14 @@
 
 ### ML Fundamentals (COMPLETE ✓)
 
-7. **feature-engineering-guide.md** (26K)
+7. **ml/feature-engineering-guide.md** (26K)
    - Numerical features
    - Categorical encoding
    - Time series features
    - Text features
    - Feature selection methods
 
-8. **ml-coding-problems.ipynb** (21K)
+8. **ml/ml-coding-problems.ipynb** (21K)
    - 20+ ML coding problems
    - Logistic regression from scratch
    - Decision trees
@@ -101,7 +101,7 @@
 
 ### System Design (COMPLETE ✓)
 
-16. **system-design-examples.md** (32K)
+16. **system-design/system-design-examples.md** (32K)
     - ML system design patterns
     - Recommendation systems
     - Search ranking
@@ -121,7 +121,7 @@
 
 ### Supporting Documents
 
-20. **mlops-production-ml-guide.md** (105K) - NEW COMPLETE
+20. **ml/mlops-production-ml-guide.md** (105K) - NEW COMPLETE
     - Model serving (TorchServe, TF Serving, Triton)
     - A/B testing, canary deployment, shadow deployment
     - Model monitoring & drift detection (Evidently, Fiddler)
@@ -260,26 +260,26 @@
 ### Technical Deep Dive (Likely Topics)
 
 **Priority 1: RAG Systems** (70% probability)
-- Use: production-rag-systems-guide.md
+- Use: gen-ai/production-rag-systems-guide.md
 - Focus: Architecture patterns, evaluation, production challenges
 - Be ready to whiteboard hybrid search pipeline
 
 **Priority 2: LLM Fine-tuning** (60% probability)
-- Use: lora-qlora-finetuning-guide.ipynb
+- Use: gen-ai/lora-qlora-finetuning-guide.ipynb
 - Focus: LoRA theory, hyperparameters, when to use vs RAG
 
 **Priority 3: Transformers/Attention** (50% probability)
-- Use: transformer-architecture-complete-guide.md
+- Use: deep-learning/transformer-architecture-complete-guide.md
 - Focus: Architecture trade-offs, scaling considerations
 
 **Priority 4: Production ML** (40% probability)
-- Use: system-design-examples.md + MLOps doc (if created)
+- Use: system-design/system-design-examples.md + ml/mlops-production-ml-guide.md
 - Focus: Deployment patterns, monitoring, scaling
 
 ### Coding Round (100% probability)
 
 **Most Likely:**
-- ML algorithm from scratch (use ml-coding-problems.ipynb)
+- ML algorithm from scratch (use ml/ml-coding-problems.ipynb)
 - DSA medium difficulty (use dsa notebooks)
 
 **Preparation:**
@@ -294,7 +294,7 @@
 - RAG system architecture
 
 **Preparation:**
-- Review system-design-examples.md
+- Review system-design/system-design-examples.md
 - Practice whiteboarding RAG architecture
 
 ### Leadership/Behavioral (100% probability)
@@ -314,29 +314,29 @@
 
 ### Must Review (30 minutes each)
 
-1. **RAG Systems** - production-rag-systems-guide.md
+1. **RAG Systems** - gen-ai/production-rag-systems-guide.md
    - Hybrid search + reranking
    - Evaluation metrics
    - Production challenges
 
-2. **Transformers** - transformer-architecture-complete-guide.md
+2. **Transformers** - deep-learning/transformer-architecture-complete-guide.md
    - Architecture variants
    - Attention mechanisms
    - Scaling laws
 
-3. **Embeddings** - embedding-models-comprehensive-guide.md
+3. **Embeddings** - gen-ai/embedding-models-comprehensive-guide.md
    - Model comparison (E5, BGE, GTE)
    - Training methods
    - MTEB scores
 
-4. **LoRA Fine-tuning** - lora-qlora-finetuning-guide.ipynb
+4. **LoRA Fine-tuning** - gen-ai/lora-qlora-finetuning-guide.ipynb
    - When to use LoRA vs full fine-tuning
    - Hyperparameter selection
    - QLoRA optimizations
 
 ### Quick Refresh (15 minutes each)
 
-5. **ML Algorithms** - ml-coding-problems.ipynb
+5. **ML Algorithms** - ml/ml-coding-problems.ipynb
    - Logistic regression implementation
    - K-means implementation
    - Key metrics (precision, recall, F1)
@@ -481,13 +481,13 @@
 
 ### Recommended Final Steps (Optional):
 1. Review key documents (2-3 hours):
-   - production-rag-systems-guide.md (RAG deep dive)
-   - mlops-production-ml-guide.md (MLOps comprehensive)
-   - llm-production-complete-guide.md (LLM serving & safety)
+   - gen-ai/production-rag-systems-guide.md (RAG deep dive)
+   - ml/mlops-production-ml-guide.md (MLOps comprehensive)
+   - gen-ai/llm-production-complete-guide.md (LLM serving & safety)
 
 2. Practice coding problems (1-2 hours):
-   - ml-coding-problems.ipynb (ML from scratch)
-   - dsa-bonus-patterns.ipynb (DSA patterns)
+   - ml/ml-coding-problems.ipynb (ML from scratch)
+   - dsa/dsa-bonus-patterns.ipynb (DSA patterns)
 
 3. Review leadership stories (30 minutes):
    - leadership-stories-template.md
