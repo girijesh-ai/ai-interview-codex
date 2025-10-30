@@ -55,6 +55,20 @@ This repository contains battle-tested interview preparation materials for ML/AI
   - CNN components
 - **[ML Coding Problems](ml-coding-problems.ipynb)** - Practice problems with solutions
 
+#### Ensemble Methods
+- **[Bagging Ensemble Methods](bagging-ensemble-methods-guide.md)** - Bootstrap Aggregating complete guide:
+  - Bootstrap sampling, OOB error
+  - Random Forest deep dive
+  - Variance reduction mechanism
+  - Implementation from scratch
+  - 20+ interview questions with answers
+- **[Boosting Ensemble Methods](boosting-ensemble-methods-guide.md)** - Boosting algorithms complete guide:
+  - AdaBoost, Gradient Boosting
+  - XGBoost, LightGBM, CatBoost
+  - Bias reduction mechanism
+  - Algorithm comparison and when to use each
+  - 25+ interview questions with answers
+
 #### Production ML & MLOps
 - **[MLOps Production Guide](mlops-production-ml-guide.md)** - End-to-end ML in production:
   - Model versioning, experiment tracking
