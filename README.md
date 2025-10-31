@@ -27,10 +27,13 @@ This repository contains battle-tested interview preparation materials for ML/AI
 3. Review [System Design Examples](system-design/system-design-examples-enhanced.md)
 
 ### For LLM/GenAI Roles
-1. [LLM Production Complete Guide](gen-ai/llm-production-complete-guide.md)
-2. [Production RAG Systems](gen-ai/production-rag-systems-guide.md)
-3. [Embedding Models Guide](gen-ai/embedding-models-comprehensive-guide.md)
-4. [LoRA/QLoRA Fine-tuning](gen-ai/lora-qlora-finetuning-guide.ipynb)
+1. Start with fundamentals:
+   - [LLM Fundamentals Part 1: Tokenization & Context](gen-ai/llm-fundamentals-part1-tokenization-context.md)
+   - [LLM Fundamentals Part 2: Inference & Optimization](gen-ai/llm-fundamentals-part2-inference-optimization.md)
+2. [LLM Production Complete Guide](gen-ai/llm-production-complete-guide.md)
+3. [Production RAG Systems](gen-ai/production-rag-systems-guide.md)
+4. [Embedding Models Guide](gen-ai/embedding-models-comprehensive-guide.md)
+5. [LoRA/QLoRA Fine-tuning](gen-ai/lora-qlora-finetuning-guide.ipynb)
 
 ### For MLOps/Production ML
 1. [MLOps Production Guide](ml/mlops-production-ml-guide.md)
@@ -106,6 +109,18 @@ This repository contains battle-tested interview preparation materials for ML/AI
 ### LLM & Generative AI
 
 #### LLM Fundamentals
+- **[LLM Fundamentals Part 1: Tokenization & Context](gen-ai/llm-fundamentals-part1-tokenization-context.md)** - Core LLM concepts:
+  - Tokenization (BPE, WordPiece, SentencePiece, Unigram)
+  - Context windows and memory complexity
+  - Positional encoding (Sinusoidal, RoPE, ALiBi)
+  - Complete implementations with mermaid diagrams
+- **[LLM Fundamentals Part 2: Inference & Optimization](gen-ai/llm-fundamentals-part2-inference-optimization.md)** - Advanced LLM concepts:
+  - Inference strategies (greedy, beam search, sampling, temperature, top-k, top-p)
+  - Evaluation metrics (perplexity, task-specific)
+  - Model sizes and scaling laws (Chinchilla, Kaplan)
+  - KV cache optimization (PagedAttention, quantization)
+  - Speculative decoding (2-4× speedup)
+  - Prompting techniques (zero-shot, few-shot, CoT, self-consistency)
 - **[LLM Production Complete Guide](gen-ai/llm-production-complete-guide.md)** - Production LLMs:
   - Model selection, deployment strategies
   - Cost optimization, caching
@@ -196,10 +211,11 @@ This repository contains battle-tested interview preparation materials for ML/AI
 - Days 6-7: ML coding problems
 
 **Week 2: LLM/GenAI**
-- Days 1-2: LLM production guide
-- Days 3-4: RAG systems
-- Days 5: Embeddings & attention
-- Days 6-7: Fine-tuning (LoRA/QLoRA)
+- Days 1-2: LLM fundamentals (tokenization, context, inference)
+- Days 3-4: LLM production guide
+- Days 5: RAG systems
+- Days 6: Embeddings & attention
+- Day 7: Fine-tuning (LoRA/QLoRA)
 
 **Week 3: System Design**
 - Days 1-2: System design framework
@@ -214,8 +230,9 @@ This repository contains battle-tested interview preparation materials for ML/AI
 ### 2-Week Crash Course
 **Week 1: ML + LLM**
 - Days 1-2: ML coding essentials
-- Days 3-4: LLM production basics
-- Days 5-6: RAG systems
+- Days 3: LLM fundamentals (tokenization, context, inference)
+- Days 4-5: LLM production basics
+- Day 6: RAG systems
 - Day 7: System design framework
 
 **Week 2: System Design + DSA**
