@@ -188,6 +188,65 @@ Agentic AI represents a paradigm shift from:
 
 ---
 
+### Module 8: Model Context Protocol (MCP)
+**Files:**
+- `mcp-interview-preparation-guide.md` (Interview prep)
+- `mcp-hands-on-implementation.ipynb` (Hands-on coding)
+- `mcp-enterprise-banking-use-case.md` (Real-world use case)
+- `mcp-production-best-practices.md` (Production deployment)
+
+**What You'll Learn:**
+- MCP fundamentals and architecture (Anthropic's open standard for AI-tool integration)
+- Three core primitives: Tools, Resources, Prompts
+- Client-Host-Server architecture and transport layers (stdio, HTTP+SSE)
+- Building production MCP servers and clients
+- Enterprise-grade MCP deployment patterns
+- Security best practices (mTLS, authentication, secrets management)
+
+**Key Concepts:**
+- **MCP Protocol** - Universal standard for AI-tool integration (launched Nov 2024)
+- **Three Primitives** - Tools (model-controlled), Resources (app-controlled), Prompts (user-controlled)
+- **Client-Host-Server** - 1:1 client-server relationships, many-to-many host architecture
+- **Transport Layers** - stdio (local), HTTP+SSE (remote/production)
+- **Enterprise Deployment** - HA clusters, multi-region, serverless patterns
+- **Security** - mTLS, authentication, authorization, zero-trust architecture
+
+**Hands-On Examples:**
+- Building MCP servers with custom tools
+- Implementing resource providers
+- Creating prompt templates
+- GitHub integration MCP server
+- Database query MCP server
+- Complete enterprise banking use case with data residency compliance
+
+**Production Patterns:**
+- High-availability MCP server clusters
+- Multi-region deployment with global load balancing
+- Serverless MCP on AWS Lambda
+- Circuit breakers, retries, graceful degradation
+- Comprehensive monitoring and observability
+- Cost optimization strategies
+
+**Enterprise Use Case:**
+- Banking mainframe integration with cloud AI agents
+- Zero-trust security model with data residency compliance
+- Tokenization, field-level encryption, HSM integration
+- PCI-DSS, SOX, GDPR, GLBA compliance architecture
+- Multi-agent orchestration for fraud detection
+- Complete implementation with ROI analysis (700% ROI, $22.75M annual benefit)
+
+**Mermaid Diagrams:** 25+ architecture, flow, and security diagrams
+
+**Interview Prep:** 10 comprehensive Q&A sections covering MCP architecture, security, production deployment, industry adoption
+
+**Why MCP Matters:**
+- **Universal Standard** - Single protocol for all AI-tool integrations (vs proprietary APIs)
+- **Future-Proof** - Adopted by Anthropic (Nov 2024), OpenAI (Mar 2025), Google (Apr 2025)
+- **Enterprise-Ready** - Production patterns for regulated industries
+- **Developer Experience** - 10× faster integration vs custom APIs
+
+---
+
 ## 🎯 Learning Paths
 
 ### Path 1: Interview Preparation (1-2 weeks)
@@ -320,7 +379,8 @@ python -c "import anthropic; print('Ready!')"
 | **05-Research Agents** | 22 | 8 | 8 | 7 |
 | **06-Agentic RAG** | 24 | 12 | 9 | 7 |
 | **07-Framework Comparison** | 30 | 15 | 4 | - |
-| **Total** | **145** | **85** | **47** | **45** |
+| **08-MCP** | 60 | 40 | 25 | 10 |
+| **Total** | **205** | **125** | **72** | **55** |
 
 ### Coverage Scope
 - ✅ All 6 Anthropic agentic patterns
@@ -331,6 +391,8 @@ python -c "import anthropic; print('Ready!')"
 - ✅ Research agents (CoT, ToT, GoT)
 - ✅ Agentic RAG patterns
 - ✅ Framework comparisons
+- ✅ Model Context Protocol (MCP)
+- ✅ Enterprise deployment patterns
 - ✅ Production best practices
 
 ---
@@ -569,6 +631,13 @@ Use this to track your progress:
   - [ ] Review all comparison matrices
   - [ ] Practice framework selection
   - [ ] Make informed decision for your project
+
+- [ ] **Module 8:** Model Context Protocol (MCP)
+  - [ ] Understand MCP architecture and three core primitives
+  - [ ] Build MCP server with custom tools
+  - [ ] Implement MCP client integration
+  - [ ] Review enterprise banking use case
+  - [ ] Study production deployment patterns
 
 - [ ] **Final Project**
   - [ ] Build end-to-end agentic system

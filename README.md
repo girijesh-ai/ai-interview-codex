@@ -24,7 +24,8 @@ This repository contains battle-tested interview preparation materials for ML/AI
 2. Study iterative examples:
    - [Agentic AI Customer Support](agentic-ai/agentic-ai-iterative-interview.md)
    - [AI Code Review System](agentic-ai/code-review-ai-iterative-interview.md)
-3. Review [System Design Examples](system-design/system-design-examples-enhanced.md)
+3. Study [Model Context Protocol (MCP)](agentic-ai/mcp-interview-preparation-guide.md) - Universal AI-tool integration standard
+4. Review [System Design Examples](system-design/system-design-examples-enhanced.md)
 
 ### For LLM/GenAI Roles
 1. Start with fundamentals:
@@ -34,6 +35,11 @@ This repository contains battle-tested interview preparation materials for ML/AI
 3. [Production RAG Systems](gen-ai/production-rag-systems-guide.md)
 4. [Embedding Models Guide](gen-ai/embedding-models-comprehensive-guide.md)
 5. [LoRA/QLoRA Fine-tuning](gen-ai/lora-qlora-finetuning-guide.ipynb)
+6. **Model Context Protocol (MCP):**
+   - [MCP Interview Preparation Guide](agentic-ai/mcp-interview-preparation-guide.md)
+   - [MCP Hands-On Implementation](agentic-ai/mcp-hands-on-implementation.ipynb)
+   - [MCP Enterprise Banking Use Case](agentic-ai/mcp-enterprise-banking-use-case.md)
+   - [MCP Production Best Practices](agentic-ai/mcp-production-best-practices.md)
 
 ### For MLOps/Production ML
 1. [MLOps Production Guide](ml/mlops-production-ml-guide.md)
@@ -173,6 +179,39 @@ This repository contains battle-tested interview preparation materials for ML/AI
   - Hybrid memory architecture (4 layers)
   - Framework comparison (Anthropic, LangGraph, CrewAI, OpenAI Swarm)
   - Semantic caching (40-70% cost reduction)
+
+#### Model Context Protocol (MCP)
+- **[MCP Interview Preparation Guide](agentic-ai/mcp-interview-preparation-guide.md)** - Complete MCP interview prep:
+  - MCP architecture and three core primitives
+  - Client-Host-Server architecture patterns
+  - Transport layers (stdio, HTTP+SSE)
+  - Production deployment patterns
+  - Security best practices (mTLS, authentication)
+  - Industry adoption timeline
+  - 10 comprehensive Q&A sections
+  - 25+ mermaid diagrams
+- **[MCP Hands-On Implementation](agentic-ai/mcp-hands-on-implementation.ipynb)** - Practical MCP coding:
+  - Building MCP servers with custom tools
+  - Implementing resource providers
+  - Creating prompt templates
+  - GitHub and database integration examples
+  - Complete end-to-end projects
+- **[MCP Enterprise Banking Use Case](agentic-ai/mcp-enterprise-banking-use-case.md)** - Real-world enterprise example:
+  - Banking mainframe integration with cloud AI agents
+  - Zero-trust security with data residency compliance
+  - Tokenization, encryption, HSM integration
+  - PCI-DSS, SOX, GDPR, GLBA compliance
+  - Multi-agent orchestration for fraud detection
+  - Complete ROI analysis (700% ROI)
+- **[MCP Production Best Practices](agentic-ai/mcp-production-best-practices.md)** - Production deployment guide:
+  - High-availability MCP server clusters
+  - Multi-region deployment architecture
+  - Serverless MCP on AWS Lambda
+  - Security (mTLS, secrets management)
+  - Monitoring and observability
+  - Circuit breakers, retries, graceful degradation
+  - Cost optimization strategies
+  - Complete production checklist
 
 #### Traditional System Design
 - **[System Design Examples Enhanced](system-design/system-design-examples-enhanced.md)** - ML system designs:
