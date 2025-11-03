@@ -161,7 +161,7 @@ graph TB
 
 ```mermaid
 graph TD
-    A["User Request: Process employee onboarding"] --> B["Supervisor Agent Orchestrator"]
+    A[User Request] --> B[Supervisor Agent]
 
     B --> C{Analyze Request}
     C -->|HR Tasks| D[HR Agent]
@@ -177,14 +177,14 @@ graph TD
     F --> F1[Setup payroll]
     F --> F2[Tax forms]
 
-    D1 --> G["Supervisor: Aggregate Results"]
+    D1 --> G[Aggregate Results]
     D2 --> G
     E1 --> G
     E2 --> G
     F1 --> G
     F2 --> G
 
-    G --> H["User: Onboarding Complete"]
+    G --> H[Onboarding Complete]
 
     style B fill:#99ff99
     style G fill:#ffcc99
@@ -258,11 +258,11 @@ graph LR
 
 ```mermaid
 graph TB
-    A["Traditional AI: Reactive"] --> B["User: What's the weather? | AI: It's 72°F"]
+    A["Traditional AI: Reactive"] --> B["User: What's the weather? - AI: It's 72°F"]
 
     C["Agentic AI: Proactive"] --> D["User: Plan my trip to Paris"]
-    D --> E["Agent Reasons: 1. Check weather | 2. Find flights | 3. Book hotel | 4. Plan itinerary"]
-    E --> F["Executes Actions: Queries weather API | Searches flights | Books hotel | Creates schedule"]
+    D --> E["Agent Reasons: 1. Check weather - 2. Find flights - 3. Book hotel - 4. Plan itinerary"]
+    E --> F["Executes Actions: Queries weather API - Searches flights - Books hotel - Creates schedule"]
     F --> G["Returns Complete Plan: Trip booked! Here's your itinerary..."]
 
     style C fill:#99ff99
@@ -407,13 +407,13 @@ The **Agent Development Kit (ADK)** is a Python library and CLI for building and
 
 ```mermaid
 graph LR
-    A[Developer] --> B[Write Agent | Python + YAML]
+    A[Developer] --> B[Write Agent]
     B --> C[ADK CLI]
-    C --> D[Local Testing | Developer Edition]
-    D --> E[Deploy to | watsonx Orchestrate]
+    C --> D[Local Testing]
+    D --> E[Deploy to watsonx Orchestrate]
     E --> F[Production Agent]
 
-    C --> G[Agent Builder UI | No-code Alternative]
+    C --> G[Agent Builder UI]
     G --> E
 
     style C fill:#99ff99
@@ -666,15 +666,15 @@ graph TB
     A --> E[Chat]
     A --> F[Deploy]
 
-    B --> B1["env activate local | env list | env switch"]
+    B --> B1["env activate local - env list - env switch"]
 
-    C --> C1["agents import -f agent.yaml | agents list | agents delete"]
+    C --> C1["agents import -f agent.yaml - agents list - agents delete"]
 
-    D --> D1["tools import -k python | tools import -k openapi | tools list"]
+    D --> D1["tools import -k python - tools import -k openapi - tools list"]
 
-    E --> E1["chat start | chat with agent_name"]
+    E --> E1["chat start - chat with agent_name"]
 
-    F --> F1["deploy --env production | deploy --validate"]
+    F --> F1["deploy --env production - deploy --validate"]
 
     style A fill:#99ff99
 ```
@@ -704,18 +704,18 @@ orchestrate deploy --env production --agent salesforce_opportunity_agent
 
 ```mermaid
 flowchart TD
-    A[User Input: | 'Find high-value opportunities'] --> B[Thought: | Need to search with filters]
+    A["User Input: Find high-value opportunities"] --> B["Thought: Need to search with filters"]
 
-    B --> C[Action: | search_opportunities]
-    C --> D[Observation: | Found 5 opportunities]
+    B --> C["Action: search_opportunities"]
+    C --> D["Observation: Found 5 opportunities"]
 
-    D --> E[Thought: | User likely wants details]
+    D --> E["Thought: User likely wants details"]
 
-    E --> F[Action: | Format results as table]
-    F --> G[Observation: | Table created]
+    E --> F["Action: Format results as table"]
+    F --> G["Observation: Table created"]
 
-    G --> H[Thought: | Ready to respond]
-    H --> I[Final Answer: | Present formatted results]
+    G --> H["Thought: Ready to respond"]
+    H --> I["Final Answer: Present formatted results"]
 
     style B fill:#e6f3ff
     style E fill:#e6f3ff
@@ -773,13 +773,13 @@ class ReActAgent(Agent):
 
 ```mermaid
 graph TB
-    A[Skills Catalog] --> B[Pre-built Skills | 500+]
+    A[Skills Catalog] --> B[Pre-built Skills - 500+]
     A --> C[Custom Skills]
 
-    B --> B1[Enterprise Apps | Salesforce, SAP, Workday]
-    B --> B2[Communication | Email, Slack, Teams]
-    B --> B3[Productivity | Calendar, Docs, Tasks]
-    B --> B4[Analytics | Tableau, PowerBI]
+    B --> B1[Enterprise Apps - Salesforce, SAP, Workday]
+    B --> B2[Communication - Email, Slack, Teams]
+    B --> B3[Productivity - Calendar, Docs, Tasks]
+    B --> B4[Analytics - Tableau, PowerBI]
 
     C --> C1[OpenAPI Import]
     C --> C2[Python Functions]
@@ -900,7 +900,7 @@ x-watsonx-orchestrate:
 orchestrate tools import -k openapi -f weather_api.yaml
 
 # Verify import
-orchestrate tools list | grep weather
+orchestrate tools list - grep weather
 
 # Test skill
 orchestrate chat start
@@ -959,11 +959,11 @@ mindmap
 ```mermaid
 graph TB
     subgraph "AgentOps Platform"
-        A[Agent Development] --> B[Pre-deployment | Evaluation]
-        B --> C[Staging Area | Testing]
-        C --> D[Production | Deployment]
-        D --> E[Continuous | Monitoring]
-        E --> F[Incident | Response]
+        A[Agent Development] --> B[Pre-deployment - Evaluation]
+        B --> C[Staging Area - Testing]
+        C --> D[Production - Deployment]
+        D --> E[Continuous - Monitoring]
+        E --> F[Incident - Response]
         F --> A
     end
 
@@ -980,47 +980,47 @@ graph TB
 
 ```mermaid
 graph LR
-    A[Observability | Dashboard] --> B[Agent Metrics]
+    A[Observability - Dashboard] --> B[Agent Metrics]
     A --> C[Tool Metrics]
     A --> D[Workflow Metrics]
     A --> E[System Metrics]
 
-    B --> B1[Success Rate | Latency | Token Usage | Cost per Query]
+    B --> B1[Success Rate - Latency - Token Usage - Cost per Query]
 
-    C --> C1[Tool Call Frequency | Tool Success Rate | Tool Latency | Error Types]
+    C --> C1[Tool Call Frequency - Tool Success Rate - Tool Latency - Error Types]
 
-    D --> D1[Workflow Completion | Step Duration | Human Interventions | Failure Points]
+    D --> D1[Workflow Completion - Step Duration - Human Interventions - Failure Points]
 
-    E --> E1[API Throughput | Queue Depth | Resource Usage | Error Rates]
+    E --> E1[API Throughput - Queue Depth - Resource Usage - Error Rates]
 
     style A fill:#99ff99
 ```
 
 **Key Metrics**:
 
-| Metric | Description | Good Target |
+| Metric - Description - Good Target |
 |--------|-------------|-------------|
-| **Agent Success Rate** | % of queries successfully completed | > 95% |
-| **Average Latency** | Time from query to response | < 5 seconds |
-| **Tool Call Accuracy** | % of correct tool selections | > 90% |
-| **Token Efficiency** | Tokens used per query | Minimize |
-| **Cost per Query** | $ per user interaction | < $0.05 |
-| **Human Escalation Rate** | % requiring human intervention | < 10% |
+| **Agent Success Rate** - % of queries successfully completed - > 95% |
+| **Average Latency** - Time from query to response - < 5 seconds |
+| **Tool Call Accuracy** - % of correct tool selections - > 90% |
+| **Token Efficiency** - Tokens used per query - Minimize |
+| **Cost per Query** - $ per user interaction - < $0.05 |
+| **Human Escalation Rate** - % requiring human intervention - < 10% |
 
 ### 6.3 Governance Framework
 
 ```mermaid
 flowchart TD
-    A[Agent Submission] --> B{Pre-Deployment | Evaluation}
+    A[Agent Submission] --> B{Pre-Deployment - Evaluation}
 
     B --> C[Quality Tests]
-    C --> C1[Journey Completion | Answer Relevancy | Tool Call Accuracy]
+    C --> C1[Journey Completion - Answer Relevancy - Tool Call Accuracy]
 
     B --> D[Security Tests]
-    D --> D1[Prompt Injection | Data Leakage | Authorization]
+    D --> D1[Prompt Injection - Data Leakage - Authorization]
 
     B --> E[Performance Tests]
-    E --> E1[Latency | Throughput | Cost]
+    E --> E1[Latency - Throughput - Cost]
 
     C1 --> F{All Tests Pass?}
     D1 --> F
@@ -1032,7 +1032,7 @@ flowchart TD
     G --> A
 
     H --> I[Production Monitoring]
-    I --> J{Policy | Violations?}
+    I --> J{Policy - Violations?}
 
     J -->|Yes| K[Alert + Auto-remediate]
     J -->|No| L[Continue Monitoring]
@@ -1209,9 +1209,9 @@ graph TB
     end
 
     subgraph "Cloud Platforms"
-        C1[AWS | Bedrock, Lambda]
-        C2[Azure | OpenAI, Functions]
-        C3[Google Cloud | Vertex AI]
+        C1[AWS - Bedrock, Lambda]
+        C2[Azure - OpenAI, Functions]
+        C3[Google Cloud - Vertex AI]
     end
 
     subgraph "Collaboration"
@@ -1256,15 +1256,15 @@ graph TB
 
 ```mermaid
 graph LR
-    A[AWS Marketplace] --> B[watsonx Orchestrate | as a Service]
+    A[AWS Marketplace] --> B[watsonx Orchestrate - as a Service]
 
-    B --> C[Amazon Bedrock | Foundation Models]
-    B --> D[Amazon Bedrock | AgentCore]
-    B --> E[AWS Lambda | Custom Functions]
-    B --> F[Amazon S3 | Storage]
+    B --> C[Amazon Bedrock - Foundation Models]
+    B --> D[Amazon Bedrock - AgentCore]
+    B --> E[AWS Lambda - Custom Functions]
+    B --> F[Amazon S3 - Storage]
 
     C --> G[Claude, Llama, etc.]
-    D --> H[A2A Protocol | Agent Collaboration]
+    D --> H[A2A Protocol - Agent Collaboration]
     E --> I[Serverless Agents]
     F --> J[Document Storage]
 
@@ -1282,9 +1282,9 @@ graph LR
 
 ```mermaid
 flowchart TD
-    A[Celonis Process | Intelligence Graph] --> B[Identify Automation | Opportunities]
+    A[Celonis Process - Intelligence Graph] --> B[Identify Automation - Opportunities]
 
-    B --> C[Process Mining | Analysis]
+    B --> C[Process Mining - Analysis]
     C --> D[Bottleneck Detection]
     C --> E[Inefficiency Identification]
     C --> F[Variant Analysis]
@@ -1293,12 +1293,12 @@ flowchart TD
     E --> G
     F --> G
 
-    G --> H[Build AI Agents | for Identified Tasks]
+    G --> H[Build AI Agents - for Identified Tasks]
 
     H --> I[Deploy Agents]
     I --> J[Monitor Performance]
 
-    J --> K[Feed Results Back | to Celonis]
+    J --> K[Feed Results Back - to Celonis]
     K --> A
 
     style A fill:#99ccff
@@ -1375,26 +1375,26 @@ graph TB
 
     subgraph "watsonx Orchestrate Agent"
         B[Agent Receives Query]
-        C{Requires | Knowledge?}
+        C{Requires - Knowledge?}
     end
 
     subgraph "Knowledge Retrieval"
-        D[Query Embedding | granite-embedding]
-        E[Vector Search | Milvus/Elasticsearch]
+        D[Query Embedding - granite-embedding]
+        E[Vector Search - Milvus/Elasticsearch]
         F[Retrieve Top-K Docs]
         G[Rerank Results]
     end
 
     subgraph "LLM Generation"
-        H[Construct Prompt: | Context + Query]
-        I[LLM Generation | Granite/Bedrock]
+        H[Construct Prompt: Context + Query]
+        I[LLM Generation - Granite/Bedrock]
         J[Response]
     end
 
     subgraph "Knowledge Sources"
         K[IBM Watson Discovery]
-        L[Vector Databases | Milvus, MongoDB Atlas]
-        M[Enterprise Docs | Confluence, SharePoint]
+        L[Vector Databases - Milvus, MongoDB Atlas]
+        M[Enterprise Docs - Confluence, SharePoint]
     end
 
     A --> B
@@ -1544,7 +1544,7 @@ results = kb.search("How many vacation days do I get?", top_k=3)
 
 ```mermaid
 graph LR
-    A[watsonx Orchestrate | Agent] --> B[Watson Discovery | API]
+    A[watsonx Orchestrate - Agent] --> B[Watson Discovery - API]
 
     B --> C[Document Ingestion]
     C --> C1[PDFs]
@@ -1553,7 +1553,7 @@ graph LR
     C --> C4[SharePoint]
 
     B --> D[Search & Retrieval]
-    D --> D1[Natural Language | Search]
+    D --> D1[Natural Language - Search]
     D --> D2[Faceted Search]
     D --> D3[Entity Extraction]
 
@@ -1664,9 +1664,9 @@ def hybrid_search(query: str, top_k: int = 10, alpha: float = 0.5):
 ```mermaid
 graph TB
     subgraph "Development"
-        A[Local Development | Developer Edition]
+        A[Local Development - Developer Edition]
         B[ADK CLI]
-        C[Version Control | Git]
+        C[Version Control - Git]
     end
 
     subgraph "CI/CD Pipeline"
@@ -1683,7 +1683,7 @@ graph TB
 
     subgraph "Production"
         J[Production Deployment]
-        K[Blue-Green | Deployment]
+        K[Blue-Green - Deployment]
         L[Canary Release]
     end
 
@@ -1719,15 +1719,15 @@ graph TB
 
 ```mermaid
 graph LR
-    A[watsonx Orchestrate] --> B[IBM Cloud | SaaS]
-    A --> C[AWS | Marketplace]
-    A --> D[On-Premises | Cloud Pak for Data]
+    A[watsonx Orchestrate] --> B[IBM Cloud - SaaS]
+    A --> C[AWS - Marketplace]
+    A --> D[On-Premises - Cloud Pak for Data]
 
-    B --> B1[Multi-tenant | Shared infrastructure | Pay-as-you-go]
+    B --> B1[Multi-tenant - Shared infrastructure - Pay-as-you-go]
 
-    C --> C1[Single-tenant | AWS infrastructure | Marketplace billing]
+    C --> C1[Single-tenant - AWS infrastructure - Marketplace billing]
 
-    D --> D1[Self-managed | Private cloud/data center | Capacity licensing]
+    D --> D1[Self-managed - Private cloud/data center - Capacity licensing]
 
     style A fill:#99ff99
 ```
@@ -1738,24 +1738,24 @@ graph LR
 graph TB
     A[Load Balancer] --> B[Agent API Gateway]
 
-    B --> C[Agent Cluster 1 | Auto-scaling Group]
-    B --> D[Agent Cluster 2 | Auto-scaling Group]
-    B --> E[Agent Cluster N | Auto-scaling Group]
+    B --> C[Agent Cluster 1 - Auto-scaling Group]
+    B --> D[Agent Cluster 2 - Auto-scaling Group]
+    B --> E[Agent Cluster N - Auto-scaling Group]
 
-    C --> F[LLM Service | watsonx.ai / Bedrock]
+    C --> F[LLM Service - watsonx.ai / Bedrock]
     D --> F
     E --> F
 
-    C --> G[Vector DB | Milvus Cluster]
+    C --> G[Vector DB - Milvus Cluster]
     D --> G
     E --> G
 
-    C --> H[Tool Services | Microservices]
+    C --> H[Tool Services - Microservices]
     D --> H
     E --> H
 
-    F --> I[Model Cache | Redis]
-    G --> J[Data Lake | S3 / Cloud Object Storage]
+    F --> I[Model Cache - Redis]
+    G --> J[Data Lake - S3 / Cloud Object Storage]
 
     style B fill:#99ff99
     style F fill:#99ccff
@@ -1802,20 +1802,20 @@ autoscaling:
 ```mermaid
 graph TB
     subgraph "Primary Region"
-        A[watsonx Orchestrate | Primary]
-        B[Vector DB | Primary]
-        C[LLM Service | Primary]
+        A[watsonx Orchestrate - Primary]
+        B[Vector DB - Primary]
+        C[LLM Service - Primary]
     end
 
     subgraph "DR Region"
-        D[watsonx Orchestrate | Standby]
-        E[Vector DB | Replica]
-        F[LLM Service | Standby]
+        D[watsonx Orchestrate - Standby]
+        E[Vector DB - Replica]
+        F[LLM Service - Standby]
     end
 
-    A -->|Continuous | Replication| D
-    B -->|Async | Replication| E
-    C -->|Model | Sync| F
+    A -->|Continuous - Replication| D
+    B -->|Async - Replication| E
+    C -->|Model - Sync| F
 
     G[Global Load Balancer] --> A
     G -.->|Failover| D
@@ -1823,7 +1823,7 @@ graph TB
     H[Health Check] -.->|Monitor| A
     H -.->|Monitor| D
 
-    I{Primary | Failure?} -->|Yes| J[Automatic | Failover]
+    I{Primary - Failure?} -->|Yes| J[Automatic - Failover]
     J --> D
 
     style G fill:#99ff99
@@ -1874,18 +1874,18 @@ mindmap
 
 ```mermaid
 graph TB
-    A[Enterprise AI | Automation] --> B[IBM watsonx | Orchestrate]
+    A[Enterprise AI - Automation] --> B[IBM watsonx - Orchestrate]
     A --> C[UiPath]
     A --> D[Automation Anywhere]
-    A --> E[Microsoft Power | Automate]
+    A --> E[Microsoft Power - Automate]
 
-    B --> B1[Strengths: | ✓ Agentic AI | ✓ Natural language | ✓ Enterprise integration | ✓ AgentOps]
+    B --> B1[Strengths: ✓ Agentic AI - ✓ Natural language - ✓ Enterprise integration - ✓ AgentOps]
 
-    C --> C1[Strengths: | ✓ RPA focus | ✓ Community | ✓ Computer vision | ✓ Academy]
+    C --> C1[Strengths: ✓ RPA focus - ✓ Community - ✓ Computer vision - ✓ Academy]
 
-    D --> D1[Strengths: | ✓ Co-Pilot | ✓ Scalability | ✓ Cloud-native | ✓ IQ Bot]
+    D --> D1[Strengths: ✓ Co-Pilot - ✓ Scalability - ✓ Cloud-native - ✓ IQ Bot]
 
-    E --> E1[Strengths: | ✓ Microsoft ecosystem | ✓ Low cost | ✓ Easy adoption | ✓ Connectors]
+    E --> E1[Strengths: ✓ Microsoft ecosystem - ✓ Low cost - ✓ Easy adoption - ✓ Connectors]
 
     style B fill:#99ff99
 ```
@@ -1907,17 +1907,17 @@ graph TB
 
 ```mermaid
 flowchart TD
-    A{What's your | primary use case?} -->|Complex reasoning | & decision-making| B[watsonx Orchestrate | ⭐⭐⭐⭐⭐]
+    A{What's your - primary use case?} -->|Complex reasoning - & decision-making| B[watsonx Orchestrate - ⭐⭐⭐⭐⭐]
 
-    A -->|Desktop automation | & screen scraping| C[UiPath | ⭐⭐⭐⭐⭐]
+    A -->|Desktop automation - & screen scraping| C[UiPath - ⭐⭐⭐⭐⭐]
 
-    A -->|Simple workflows | in Microsoft 365| D[Power Automate | ⭐⭐⭐⭐⭐]
+    A -->|Simple workflows - in Microsoft 365| D[Power Automate - ⭐⭐⭐⭐⭐]
 
-    A -->|Multi-agent | orchestration| B
+    A -->|Multi-agent - orchestration| B
 
-    A -->|Enterprise AI | at scale| B
+    A -->|Enterprise AI - at scale| B
 
-    A -->|Attended automation | with Co-Pilot| E[Automation Anywhere | ⭐⭐⭐⭐⭐]
+    A -->|Attended automation - with Co-Pilot| E[Automation Anywhere - ⭐⭐⭐⭐⭐]
 
     style B fill:#99ff99
 ```
@@ -2010,13 +2010,13 @@ Aggregates results → "John Doe successfully onboarded"
 
 **Key Differences**:
 
-| Traditional Workflows | Agentic Workflows |
+| Traditional Workflows - Agentic Workflows |
 |----------------------|-------------------|
-| Deterministic (if-then-else) | AI-driven decisions |
-| Fixed paths | Dynamic routing |
-| Brittle (breaks on exceptions) | Self-healing |
-| No reasoning | Multi-step reasoning |
-| Human defines every step | Agents decide steps |
+| Deterministic (if-then-else) - AI-driven decisions |
+| Fixed paths - Dynamic routing |
+| Brittle (breaks on exceptions) - Self-healing |
+| No reasoning - Multi-step reasoning |
+| Human defines every step - Agents decide steps |
 
 **Example**:
 
@@ -2240,9 +2240,9 @@ graph TB
     A[Agents] --> B[Tools]
     B --> C[Skills]
 
-    A1[Decision-making | entities] -.-> A
-    B1[Capabilities | agents can use] -.-> B
-    C1[Individual | functions] -.-> C
+    A1[Decision-making - entities] -.-> A
+    B1[Capabilities - agents can use] -.-> B
+    C1[Individual - functions] -.-> C
 
     style A fill:#99ff99
     style B fill:#99ccff
@@ -2295,14 +2295,14 @@ Agent: HR Onboarding Agent
 
 **Key Differences**:
 
-| Dimension | MLOps | AgentOps |
+| Dimension - MLOps - AgentOps |
 |-----------|-------|----------|
-| **Focus** | Model performance | Agent behavior |
-| **Metrics** | Accuracy, F1, latency | Success rate, tool accuracy, cost |
-| **Monitoring** | Single model | Multi-agent workflows |
-| **Governance** | Model versioning | Policy enforcement, guardrails |
-| **Testing** | Validation set | Journey completion, scenarios |
-| **Failure Modes** | Wrong predictions | Wrong tool calls, loops, policy violations |
+| **Focus** - Model performance - Agent behavior |
+| **Metrics** - Accuracy, F1, latency - Success rate, tool accuracy, cost |
+| **Monitoring** - Single model - Multi-agent workflows |
+| **Governance** - Model versioning - Policy enforcement, guardrails |
+| **Testing** - Validation set - Journey completion, scenarios |
+| **Failure Modes** - Wrong predictions - Wrong tool calls, loops, policy violations |
 
 **AgentOps Capabilities in watsonx Orchestrate**:
 
@@ -2452,13 +2452,13 @@ Remediate: If not resolved in 10 min, route to smaller model
 
 ```mermaid
 graph LR
-    A[Agent Execution] --> B[OpenTelemetry | Instrumentation]
+    A[Agent Execution] --> B[OpenTelemetry - Instrumentation]
     B --> C[Trace Exporter]
 
-    C --> D[Jaeger | Distributed Tracing]
-    C --> E[Prometheus | Metrics]
-    C --> F[Grafana | Visualization]
-    C --> G[AgentOps | Dashboard]
+    C --> D[Jaeger - Distributed Tracing]
+    C --> E[Prometheus - Metrics]
+    C --> F[Grafana - Visualization]
+    C --> G[AgentOps - Dashboard]
 
     style G fill:#99ff99
 ```
@@ -2628,15 +2628,15 @@ def hybrid_rag(query):
 
 ```mermaid
 flowchart TD
-    A{What's your | scale?} -->|< 1M vectors| B[ChromaDB or | MongoDB Atlas]
-    A -->|1M - 10M| C[MongoDB Atlas or | Elasticsearch]
+    A{What's your - scale?} -->|< 1M vectors| B[ChromaDB or - MongoDB Atlas]
+    A -->|1M - 10M| C[MongoDB Atlas or - Elasticsearch]
     A -->|> 10M| D[Milvus]
 
-    E{Existing | infrastructure?} -->|IBM Cloud| F[Watson Discovery]
+    E{Existing - infrastructure?} -->|IBM Cloud| F[Watson Discovery]
     E -->|AWS| G[OpenSearch]
     E -->|MongoDB| H[Atlas Vector Search]
 
-    I{Need hybrid | search?} -->|Yes| J[Elasticsearch or | Watson Discovery]
+    I{Need hybrid - search?} -->|Yes| J[Elasticsearch or - Watson Discovery]
     I -->|No| K[Milvus]
 
     style D fill:#99ff99
@@ -2646,13 +2646,13 @@ flowchart TD
 
 **Recommendation Matrix**:
 
-| Use Case | Best Choice | Reason |
+| Use Case - Best Choice - Reason |
 |----------|------------|--------|
-| Large-scale production | **Milvus** | Performance, scalability |
-| Enterprise, managed | **Watson Discovery** | IBM integration, features |
-| Hybrid search | **Elasticsearch** | Keyword + vector |
-| Quick prototype | **ChromaDB** | Easy setup |
-| Existing MongoDB | **Atlas Vector Search** | Unified storage |
+| Large-scale production - **Milvus** - Performance, scalability |
+| Enterprise, managed - **Watson Discovery** - IBM integration, features |
+| Hybrid search - **Elasticsearch** - Keyword + vector |
+| Quick prototype - **ChromaDB** - Easy setup |
+| Existing MongoDB - **Atlas Vector Search** - Unified storage |
 
 **Configuration Example**:
 
@@ -2708,7 +2708,7 @@ graph TB
     I[Global DNS] --> A
     I -.->|Failover| E
 
-    C -->|Async | Replication| G
+    C -->|Async - Replication| G
 
     J[Health Checks] -.-> A
     J -.-> E
@@ -2806,13 +2806,13 @@ def health_check():
 
 ```mermaid
 graph LR
-    A[Model Selection] --> B[Granite 3-8B | for most tasks]
-    A --> C[Granite 3-2B | for simple tasks]
-    A --> D[Granite 13B+ | for complex reasoning]
+    A[Model Selection] --> B[Granite 3-8B - for most tasks]
+    A --> C[Granite 3-2B - for simple tasks]
+    A --> D[Granite 13B+ - for complex reasoning]
 
-    E[Model Caching] --> F[Cache frequent | queries]
+    E[Model Caching] --> F[Cache frequent - queries]
 
-    G[Quantization] --> H[INT8 for | faster inference]
+    G[Quantization] --> H[INT8 for - faster inference]
 
     style B fill:#99ff99
     style F fill:#99ff99
@@ -2890,12 +2890,12 @@ def rag_with_cache(query):
 
 **Performance Targets**:
 
-| Metric | Target | Strategy |
+| Metric - Target - Strategy |
 |--------|--------|----------|
-| Latency (P95) | < 5s | Model selection, caching |
-| Throughput | > 100 QPS | Batching, scaling |
-| Cost per Query | < $0.05 | Smaller models, caching |
-| Token Efficiency | Minimize | Prompt optimization |
+| Latency (P95) - < 5s - Model selection, caching |
+| Throughput - > 100 QPS - Batching, scaling |
+| Cost per Query - < $0.05 - Smaller models, caching |
+| Token Efficiency - Minimize - Prompt optimization |
 
 **Monitoring**:
 ```python
@@ -2928,7 +2928,7 @@ def agent_query(query: str):
 
 ```mermaid
 mindmap
-  root((Security & | Compliance))
+  root((Security & - Compliance))
     Authentication
       OAuth 2.0
       SAML SSO
@@ -3168,14 +3168,14 @@ llm_config = {
 
 **Example Scenarios**:
 
-| Scenario | Best Choice | Why |
+| Scenario - Best Choice - Why |
 |----------|-------------|-----|
-| Customer support chatbot with multi-agent routing | **watsonx Orchestrate** | Agentic AI, NLP, multi-agent |
-| Invoice data extraction from PDFs | **UiPath** | Document understanding, RPA |
-| Automate Outlook email sorting | **Power Automate** | Microsoft ecosystem, simple |
-| Complex procurement with approvals, negotiations | **watsonx Orchestrate** | Reasoning, decision-making |
-| Attended desktop automation for call center | **UiPath** | Attended robots, UI automation |
-| Employee onboarding across HR, IT, Finance | **watsonx Orchestrate** | Multi-system, agentic workflows |
+| Customer support chatbot with multi-agent routing - **watsonx Orchestrate** - Agentic AI, NLP, multi-agent |
+| Invoice data extraction from PDFs - **UiPath** - Document understanding, RPA |
+| Automate Outlook email sorting - **Power Automate** - Microsoft ecosystem, simple |
+| Complex procurement with approvals, negotiations - **watsonx Orchestrate** - Reasoning, decision-making |
+| Attended desktop automation for call center - **UiPath** - Attended robots, UI automation |
+| Employee onboarding across HR, IT, Finance - **watsonx Orchestrate** - Multi-system, agentic workflows |
 
 **Hybrid Approach**:
 Many enterprises use **multiple platforms**:
@@ -3196,12 +3196,12 @@ Many enterprises use **multiple platforms**:
 **1. Reliability & Trust**
 ```mermaid
 graph TD
-    A[Challenge: | Non-deterministic behavior] --> B[Solution: | Rigorous testing]
+    A[Challenge: Non-deterministic behavior] --> B[Solution: Rigorous testing]
     B --> B1[Journey completion tests]
     B --> B2[Regression testing]
     B --> B3[Shadow deployment]
 
-    C[Challenge: | Hallucinations] --> D[Solution: | RAG + Citations]
+    C[Challenge: Hallucinations] --> D[Solution: RAG + Citations]
     D --> D1[Ground in facts]
     D --> D2[Provide sources]
     D --> D3[Confidence scores]
@@ -3270,13 +3270,13 @@ graph TD
 
 **Mitigation Strategies**:
 
-| Challenge | Mitigation | Metric |
+| Challenge - Mitigation - Metric |
 |-----------|-----------|--------|
-| Reliability | Testing + RAG | Success rate > 95% |
-| Cost | Caching + routing | < $0.05/query |
-| Security | Guardrails + audits | Zero breaches |
-| Performance | Scaling + optimization | Latency < 5s |
-| Governance | Policies + monitoring | 100% compliant |
+| Reliability - Testing + RAG - Success rate > 95% |
+| Cost - Caching + routing - < $0.05/query |
+| Security - Guardrails + audits - Zero breaches |
+| Performance - Scaling + optimization - Latency < 5s |
+| Governance - Policies + monitoring - 100% compliant |
 </details>
 
 ---
@@ -3402,14 +3402,14 @@ payback_period_months = (total_first_year_cost / (total_annual_benefits / 12))
 
 **4. Metrics Dashboard**:
 
-| Metric | Target | Actual | Status |
+| Metric - Target - Actual - Status |
 |--------|--------|--------|--------|
-| **Time Saved** | 5 hrs/emp/week | 5.2 hrs | ✅ |
-| **Cost per Query** | < $0.05 | $0.03 | ✅ |
-| **Automation Rate** | 70% of tasks | 75% | ✅ |
-| **Employee Satisfaction** | > 4.0/5 | 4.3/5 | ✅ |
-| **Error Rate** | < 5% | 3% | ✅ |
-| **Payback Period** | < 12 months | 2.9 months | ✅ |
+| **Time Saved** - 5 hrs/emp/week - 5.2 hrs - ✅ |
+| **Cost per Query** - < $0.05 - $0.03 - ✅ |
+| **Automation Rate** - 70% of tasks - 75% - ✅ |
+| **Employee Satisfaction** - > 4.0/5 - 4.3/5 - ✅ |
+| **Error Rate** - < 5% - 3% - ✅ |
+| **Payback Period** - < 12 months - 2.9 months - ✅ |
 
 **5. Business Case Template**:
 
