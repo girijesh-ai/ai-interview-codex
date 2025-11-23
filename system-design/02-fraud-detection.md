@@ -344,56 +344,249 @@ graph TB
 
 ### Walking Through the Architecture
 
-**You:** "Let me explain the real-time serving path with our 100ms budget:
+**You:** "Let me explain the end-to-end real-time flow with detailed latency breakdown:
 
-#### Latency Budget Breakdown
+#### Step 1: Transaction Arrives (0ms)
 
-```
-Total: 100ms (p99)
-
-1. API Gateway & Routing:       5ms
-2. Rule Engine (Fast Filter):   10ms
-3. Feature Engineering:          20ms
-   - Fetch user features:        5ms
-   - Fetch device features:      5ms
-   - Fetch merchant features:    5ms
-   - Compute real-time aggs:     5ms
-4. ML Model Ensemble:            50ms
-   - XGBoost inference:          20ms
-   - GNN inference:              15ms
-   - Neural Net inference:       15ms
-5. Decision Logic:               15ms
-Total:                           100ms
+```json
+POST /api/v1/fraud-check
+{
+  "transaction_id": "txn_abc123",
+  "user_id": "user_456",
+  "amount": 299.99,
+  "merchant_id": "merch_789",
+  "card_last4": "4242",
+  "device_id": "dev_xyz",
+  "ip_address": "203.0.113.42",
+  "timestamp": "2025-01-15T14:23:15Z"
+}
 ```
 
-#### Data Flow
+**Processing (5ms):**
+1. API Gateway validates request, authenticates - **2ms**
+2. Load balancer routes to Fraud Service pod (nearest AZ) - **1ms**
+3. Parse JSON, extract fields - **2ms**
 
-**Step 1: Rule Engine (10ms) - Fast Filter**
-- Block known bad actors (blacklisted IPs, cards, emails)
-- Block impossible scenarios (e.g., two transactions 1000 miles apart in 1 minute)
-- Catches ~30% of obvious fraud with zero ML cost
-- If rules trigger → Immediate decline
+#### Step 2: Rule Engine - Fast Filter (10ms)
 
-**Step 2: Feature Engineering (20ms)**
-- Fetch pre-computed features from Redis (user, device, merchant)
-- Compute real-time aggregations:
-  - User: Transactions in last 1 hour, 24 hours, 7 days
-  - Device: Unique users on this device in last hour
-  - Merchant: Fraud rate in last 24 hours
-  - Velocity: Transaction frequency, amount patterns
+**Deterministic checks (no ML needed):**
 
-**Step 3: ML Model Ensemble (50ms)**
-- **XGBoost (Primary):** Best for tabular features, handles imbalance well
-- **Graph Neural Network:** Detects fraud rings, shared device/IP patterns
-- **LSTM Neural Net:** Sequential patterns, user behavior modeling
+```python
+class RuleEngine:
+    """
+    Catches 30% of fraud with zero ML cost
+    All rules execute in <10ms
+    """
 
-**Step 4: Decision Engine (15ms)**
-- Ensemble score combination (weighted average)
-- Risk-based thresholds:
-  - Low risk (score < 0.3): Approve
-  - Medium risk (0.3-0.7): Request 2FA
-  - High risk (> 0.7): Decline
-- Cost-sensitive adjustment based on transaction amount"
+    def evaluate(self, txn: Transaction) -> RuleResult:
+        # Rule 1: Blacklist check (3ms - Redis lookup)
+        if self.is_blacklisted(txn.card_number, txn.ip, txn.email):
+            return RuleResult(decision='DECLINE', reason='blacklisted',
+                            confidence=1.0, latency_ms=3)
+
+        # Rule 2: Velocity limits (2ms - Redis counter check)
+        if self.exceeds_velocity(txn.user_id):
+            # >5 transactions in 5 minutes = suspicious
+            return RuleResult(decision='DECLINE', reason='velocity_exceeded',
+                            confidence=0.95, latency_ms=5)
+
+        # Rule 3: Impossible geography (2ms - calculation)
+        if self.impossible_geography(txn.user_id, txn.ip_location):
+            # Transaction 500 miles from last txn 10 mins ago
+            return RuleResult(decision='DECLINE', reason='impossible_travel',
+                            confidence=0.98, latency_ms=7)
+
+        # Rule 4: Amount threshold (1ms)
+        if txn.amount > 5000 and txn.user_account_age_days < 7:
+            # New account, large transaction
+            return RuleResult(decision='MANUAL_REVIEW', reason='new_high_value',
+                            confidence=0.7, latency_ms=8)
+
+        # Rule 5: Known good patterns (2ms)
+        if self.is_trusted_pattern(txn):
+            # Same merchant, similar amount, same device as last 10 txns
+            return RuleResult(decision='APPROVE', reason='trusted_pattern',
+                            confidence=0.9, latency_ms=10)
+
+        # No rules triggered → proceed to ML
+        return RuleResult(decision='CONTINUE_TO_ML', latency_ms=10)
+```
+
+**Impact:**
+- 30% of transactions decided by rules (3M/day out of 10M)
+- 7M transactions proceed to ML scoring
+- Saves significant ML compute cost
+
+#### Step 3: Feature Engineering (20ms)
+
+**Parallel feature fetching:**
+
+```python
+async def fetch_features(txn: Transaction) -> FeatureVector:
+    """
+    Fetch features in parallel from multiple sources
+    Total: 20ms (limited by slowest dependency)
+    """
+
+    # Launch all fetches in parallel
+    user_features_task = fetch_user_features(txn.user_id)      # 8ms
+    device_features_task = fetch_device_features(txn.device_id) # 6ms
+    merchant_features_task = fetch_merchant_features(txn.merchant_id) # 5ms
+    velocity_features_task = compute_velocity_features(txn)     # 12ms (slowest)
+
+    # Wait for all to complete (12ms - limited by velocity)
+    user_feat, device_feat, merchant_feat, velocity_feat = await asyncio.gather(
+        user_features_task,
+        device_features_task,
+        merchant_features_task,
+        velocity_features_task
+    )
+
+    # Combine into feature vector (2ms)
+    return combine_features(user_feat, device_feat, merchant_feat, velocity_feat)
+```
+
+**Feature breakdown (150 total features):**
+
+1. **User Features (40 features, 8ms from Redis):**
+   - Account age (days since creation)
+   - Email/phone verification status
+   - Historical transaction count (30d, 90d, lifetime)
+   - Average transaction amount
+   - Fraud history (past fraud count, disputes)
+   - Credit score (if available)
+
+2. **Device Features (30 features, 6ms from Redis):**
+   - Device fingerprint hash
+   - Device age (first seen timestamp)
+   - OS, browser, screen resolution
+   - Unique users on this device (fraud risk: device sharing)
+   - Geolocation (city, country)
+
+3. **Merchant Features (20 features, 5ms from Redis):**
+   - Merchant risk score (historical fraud rate)
+   - Merchant category code (MCC)
+   - Average ticket size
+   - Chargeback rate
+
+4. **Velocity Features (40 features, 12ms from Druid):**
+   ```sql
+   -- Real-time aggregations from Druid
+   SELECT
+       COUNT(*) as txn_count_1h,
+       SUM(amount) as amount_sum_1h,
+       COUNT(DISTINCT merchant_id) as unique_merchants_1h,
+       MAX(amount) as max_amount_1h
+   FROM transactions
+   WHERE user_id = ? AND timestamp > NOW() - INTERVAL '1 HOUR'
+   ```
+   - Transaction counts: 1h, 6h, 24h, 7d windows
+   - Amount statistics: sum, avg, max, std_dev
+   - Unique merchants: diversity of spending
+   - Geographic diversity: unique countries/cities
+
+5. **Transaction-Specific (20 features, computed inline <1ms):**
+   - Amount
+   - Time of day (hour, day of week)
+   - Amount deviation from user average
+   - Days since last transaction
+   - Shipping vs billing address match
+
+#### Step 4: ML Model Ensemble (50ms)
+
+**Three models run in parallel, then ensemble:**
+
+```python
+class FraudModelEnsemble:
+    def __init__(self):
+        self.xgboost = load_model('xgboost_v47.pkl')     # 200MB
+        self.gnn = load_model('gnn_fraud_rings_v12.pt')  # 50MB
+        self.lstm = load_model('lstm_sequence_v8.pt')    # 30MB
+
+    async def predict(self, features: FeatureVector) -> float:
+        # Run models in parallel
+        xgb_task = self.xgboost_predict(features)  # 20ms (CPU)
+        gnn_task = self.gnn_predict(features)      # 15ms (GPU)
+        lstm_task = self.lstm_predict(features)    # 15ms (GPU)
+
+        # Wait for all predictions (20ms - limited by XGBoost)
+        xgb_score, gnn_score, lstm_score = await asyncio.gather(
+            xgb_task, gnn_task, lstm_task
+        )
+
+        # Ensemble: weighted average (2ms)
+        final_score = (
+            0.6 * xgb_score +   # Primary model (most accurate)
+            0.25 * gnn_score +  # Fraud ring detection
+            0.15 * lstm_score   # Behavioral sequences
+        )
+
+        return final_score  # Risk score [0, 1]
+```
+
+**Model details:**
+- **XGBoost (20ms, CPU):** 500 trees, max_depth=6, 150 features
+- **GNN (15ms, GPU):** 3-layer GraphSAGE, detects fraud rings via shared devices/IPs
+- **LSTM (15ms, GPU):** 2-layer LSTM, 64 hidden units, last 10 transactions sequence
+
+#### Step 5: Decision Engine (15ms)
+
+```python
+class DecisionEngine:
+    def make_decision(self, risk_score: float, txn: Transaction) -> Decision:
+        """
+        Risk-based decision with cost-sensitivity
+        Adjusts thresholds based on transaction amount
+        """
+
+        # Base thresholds
+        approve_threshold = 0.3
+        stepup_threshold = 0.7
+
+        # Adjust for transaction amount (higher amount = more conservative)
+        if txn.amount > 1000:
+            approve_threshold = 0.2  # Stricter for large amounts
+            stepup_threshold = 0.5
+
+        # Make decision (3ms)
+        if risk_score < approve_threshold:
+            return Decision(action='APPROVE',
+                          risk_score=risk_score,
+                          reason='low_risk',
+                          latency_ms=3)
+
+        elif risk_score < stepup_threshold:
+            return Decision(action='REQUEST_2FA',
+                          risk_score=risk_score,
+                          reason='medium_risk',
+                          latency_ms=5)
+
+        else:
+            # Check if manual review queue has capacity (2ms)
+            if risk_score < 0.9 and self.manual_review_queue.has_capacity():
+                return Decision(action='MANUAL_REVIEW',
+                              risk_score=risk_score,
+                              reason='high_risk_reviewable',
+                              latency_ms=10)
+            else:
+                return Decision(action='DECLINE',
+                              risk_score=risk_score,
+                              reason='very_high_risk',
+                              latency_ms=12)
+```
+
+### Total Latency: 5ms + 10ms + 20ms + 50ms + 15ms = **100ms (p95)**
+
+**With p99 tail latency: ~150ms** due to:
+- Cache misses (user features not in Redis)
+- Network jitter (cross-AZ calls)
+- GC pauses in JVM/Python
+- Database slow queries
+
+**Timeout handling:**
+- Hard timeout: 200ms
+- If timeout → fallback to rule-based decision
+- Log timeout for investigation"
 
 **Interviewer:** "Interesting! Can you dive deeper into how you handle the class imbalance problem?"
 
