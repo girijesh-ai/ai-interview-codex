@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: enterprise-agent-system
+  labels:
+    name: enterprise-agent-system
+    environment: production

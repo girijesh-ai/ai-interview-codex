@@ -1,0 +1,25 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: enterprise-agent-system
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - secrets.yaml
+  - redis-deployment.yaml
+  - postgres-deployment.yaml
+  - api-deployment.yaml
+  - celery-deployment.yaml
+  - ingress.yaml
+
+commonLabels:
+  app.kubernetes.io/name: enterprise-agent-system
+  app.kubernetes.io/instance: production
+  app.kubernetes.io/version: "1.0.0"
+  app.kubernetes.io/managed-by: kustomize
+
+images:
+  - name: enterprise-agent-system
+    newName: your-registry/enterprise-agent-system
+    newTag: latest

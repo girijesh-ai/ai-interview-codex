@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agent-system-config
+  namespace: enterprise-agent-system
+data:
+  ENVIRONMENT: "production"
+  LOG_LEVEL: "info"
+  REDIS_URL: "redis://redis-service:6379/0"
+  KAFKA_BOOTSTRAP_SERVERS: "kafka-service:9092"
+  WEAVIATE_URL: "http://weaviate-service:8080"
+  POSTGRES_URL: "postgresql://postgres:postgres@postgres-service:5432/agent_system"
+  CELERY_BROKER_URL: "redis://redis-service:6379/0"
+  CELERY_RESULT_BACKEND: "redis://redis-service:6379/1"
+  CELERY_WORKER_CONCURRENCY: "4"
+  MAX_WORKERS: "4"
+  MAX_CONCURRENT_REQUESTS: "100"
+  REQUEST_TIMEOUT_SECONDS: "60"
+  AGENT_TIMEOUT_SECONDS: "30"
+  AGENT_MAX_RETRIES: "3"
+  MEMORY_MAX_MESSAGES: "20"
+  CACHE_TTL_SECONDS: "3600"
+  ENABLE_WEBSOCKET: "true"
+  ENABLE_MCP: "true"
+  ENABLE_ANALYTICS: "true"
+  ENABLE_CACHING: "true"
