@@ -73,23 +73,59 @@ This guide simulates a real ML system design interview focused on ETA (Estimated
 - **Updates:** Re-predict ETA every 30 seconds during active trip
 - **Scope:** Predict driving time from pickup to drop-off"
 
-### Requirements Summary
+### Requirements Summary & Calculations
 
-**You:** "Perfect! Let me summarize:
+**You:** "Perfect! Let me summarize with calculations:
 
 #### Functional Requirements
-- Predict driving time from point A to B given route
-- Real-time traffic awareness
-- Historical pattern learning (rush hour, weekday vs weekend)
-- Live event handling (accidents, road closures)
-- Continuous ETA updates during trip
+- Predict driving time from point A to B for given route
+- Real-time traffic awareness (current speeds on road segments)
+- Historical pattern learning (rush hour slow-downs, weekday vs weekend)
+- Live event handling (accidents, construction, weather impact)
+- Continuous ETA updates every 30 seconds during active trip
+- Multi-factor: Traffic, weather, events, driver behavior, time-of-day
 
-#### Non-Functional Requirements
-- **Scale:** 10K predictions/second, 1M concurrent trips
-- **Latency:** <500ms for ETA prediction
-- **Accuracy:** MAE < 3 min for trips < 30 min (<10% error)
-- **Availability:** 99.9% uptime (trips depend on it)
-- **Global:** Support worldwide road networks
+#### Non-Functional Requirements & Calculations
+
+**Scale:**
+- 10K ETA predictions/second
+- 1M active trips globally (concurrent)
+- 1M trips × 20 min avg × 2 updates/min = **40M updates/hour**
+- Road network: 100M road segments globally
+
+**Storage:**
+- Road graph: 100M segments × 200 bytes = **20GB** (nodes, edges, attributes)
+- Historical speed data: 100M segments × 24 hours × 7 days × 4 bytes = **672GB** (hourly avg speeds)
+- Real-time speeds: 100M segments × 4 bytes = **400MB** (in-memory cache)
+- Trip data: 1M trips × 1KB = **1GB** (active trips)
+
+**Compute:**
+- Graph Neural Network (GNN) for spatial dependencies
+- 10K predictions/s × 100 segments/route avg = 1M segment predictions/s
+- At 0.5ms per GNN inference = 500 GPU-seconds/s = 12K GPU-hours/day
+- With A100 at $2.16/hour = **$25K/day**
+- Optimized (batch processing): **$8K-12K/day**
+
+**Latency Budget (500ms):**
+- Route fetching: **100ms** (from navigation service)
+- Real-time traffic fetch: **50ms** (cache lookup per segment)
+- Historical pattern lookup: **50ms** (batch DB query)
+- GNN inference: **200ms** (process road graph)
+- Aggregation: **100ms** (sum segment times, apply adjustments)
+- **Total: 500ms**
+
+**Accuracy Targets:**
+- MAE (Mean Absolute Error): <3 min for trips <30 min = **<10% error**
+- 95th percentile: <5 min error
+- Accuracy by trip length:
+  - <10 min: MAE <1 min
+  - 10-30 min: MAE <3 min
+  - >30 min: MAE <10% of trip time
+- Update accuracy: Each 30s update should improve ETA
+
+**Availability:**
+- 99.9% uptime = 8.76 hours downtime/year
+- Critical system (drivers/riders depend on it)
 
 #### Key Challenges
 - **Spatio-temporal dependencies:** Traffic patterns vary by location, time, day
