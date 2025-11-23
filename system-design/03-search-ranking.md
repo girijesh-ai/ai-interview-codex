@@ -1075,6 +1075,54 @@ class LatencyOptimizations:
 
 ---
 
+## Phase 5: Production Metrics & Interview Preparation
+
+### Real Production Metrics (Google, Amazon 2025)
+
+**Scale at Google Search:**
+- 8.5 billion searches/day = ~100K QPS
+- Index: Hundreds of billions of web pages
+- Latency: <200ms p95 for query to result
+- NDCG@10: Target >0.90 for commercial queries
+
+**Amazon Product Search:**
+- 50K QPS peak (Prime Day: 200K QPS)
+- 100M+ products indexed
+- Latency: <150ms p95
+- Conversion lift: +20-30% from ML ranking vs baseline
+
+**Cost Analysis (at 50K QPS):**
+- BERT inference: $15K-20K/day (GPU compute)
+- BM25 retrieval: $2K/day (Elasticsearch cluster)
+- Feature store: $3K/day (Redis + DynamoDB)
+- Total: ~$25K/day = $750K/month
+
+**Cost Optimization:**
+- Model distillation: 60% cost savings
+- INT8 quantization: 4x throughput increase
+- FAISS IVF-PQ: 100x faster than exact search
+
+### Common Interview Mistakes
+
+**Mistake 1:** Jumping straight to BERT without explaining retrieval stage
+**Better:** "With 100M products, we can't run BERT on all. I'll use 3-stage funnel: BM25 (100M→10K), Light ranker (10K→500), BERT (500→100)"
+
+**Mistake 2:** Not discussing query understanding
+**Better:** Mention spell correction, query expansion, synonym matching before retrieval
+
+**Mistake 3:** Ignoring cold start for new products
+**Better:** "New products have no click data. I'll use content-based features (title, description embeddings) and transfer learning from similar products"
+
+### Follow-Up Questions
+
+**Q:** "How do you handle typos in queries?"
+**A:** "Two-stage: 1) Detect typos with edit distance + language model perplexity, 2) Correct using spell-check dictionary + context-aware BERT corrections. Show 'Did you mean X?' if confidence >0.9"
+
+**Q:** "What if BERT is too slow?"
+**A:** "Use distillation (BERT-Large → BERT-Tiny), quantization (FP32 → INT8), ONNX Runtime, and only apply to top 500 candidates after lighter rankers"
+
+---
+
 ## Summary & Key Takeaways
 
 **You:** "To summarize the Search Ranking system:

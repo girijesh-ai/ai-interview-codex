@@ -33,69 +33,202 @@ This guide simulates a real ML system design interview focused on real-time frau
 
 **You:** "Let me understand the scope and constraints:
 
-1. **Scale Questions:**
-   - How many transactions do we process per second?
-   - What percentage of transactions are fraudulent? (Class imbalance ratio)
-   - What's the average transaction value and variance?
+1. **Scale & Traffic Patterns:**
+   - How many transactions per second (TPS)? Peak vs average?
+   - What percentage of transactions are fraudulent? (class imbalance critical here)
+   - Geographic distribution? (fraud rates vary by region)
+   - Transaction value distribution? (median, p95, p99 amounts)
+   - What's the split: card-present vs card-not-present vs ACH/wire?
 
-2. **Latency Requirements:**
-   - What's the maximum acceptable latency for fraud detection?
-   - Do we block the transaction synchronously or flag async?
-   - Can we do multi-stage verification (instant + delayed review)?
+2. **Latency & Real-Time Requirements:**
+   - Maximum acceptable latency for fraud scoring? (p50, p95, p99)
+   - Synchronous (block transaction) or asynchronous (post-authorization review)?
+   - Can we do multi-stage verification? (instant check → 2FA → manual review)
+   - Batch processing acceptable for any use cases?
 
-3. **Business Constraints:**
-   - What's the cost of false positives (legitimate transaction blocked)?
-   - What's the cost of false negatives (fraud slips through)?
-   - Are there regulatory requirements (PCI-DSS, KYC)?
+3. **Business & Cost Constraints:**
+   - Cost of false positive (declined legitimate transaction)?
+     * Immediate revenue loss
+     * Customer lifetime value impact
+     * Customer service costs
+   - Cost of false negative (missed fraud)?
+     * Transaction amount loss
+     * Chargeback fees ($15-30 typical)
+     * Processor penalties
+   - What's the acceptable FP rate? (e.g., <5% of transactions flagged)
+   - Regulatory requirements? (PCI-DSS, KYC, AML, GDPR for EU)
 
-4. **Data Availability:**
-   - What data do we have about users? (transaction history, device info, location)
-   - Do we have real-time access to external signals? (IP reputation, device fingerprints)
-   - Historical fraud data available for training?
+4. **Data & Features:**
+   - User data: transaction history depth? (30 days, 90 days, lifetime?)
+   - Device fingerprinting available? (device ID, browser, OS)
+   - Behavioral biometrics? (typing patterns, mouse movements)
+   - External data sources? (IP reputation, email reputation, phone verification)
+   - Real-time velocity features? (transactions in last hour, unique merchants)
+   - Merchant risk profiles available?
 
-5. **Actions:**
-   - What actions can we take? (approve, decline, request 2FA, manual review)
-   - Can we use adaptive friction (ask for verification only when suspicious)?"
+5. **Actions & Friction:**
+   - What actions can system take? (approve, decline, 2FA, 3DS, manual review)
+   - Adaptive friction acceptable? (request verification only when suspicious)
+   - Can we decline partially? (approve smaller amount, decline large)
+   - Manual review SLA? (respond within 1 hour, 24 hours?)
+
+6. **Adversarial Considerations:**
+   - How quickly do fraudsters adapt? (daily, weekly, monthly model updates needed?)
+   - Fraud ring detection needed? (coordinated attacks, account takeover)
+   - Model explainability required? (regulatory compliance, customer disputes)
+   - Feedback loop: when do we learn about fraud? (instant, days later via chargebacks?)"
 
 ### Interviewer's Answers
 
-**Interviewer:** "Good questions! Here's the scope:
+**Interviewer:** "Excellent questions! Here's the detailed scope:
 
-- **Scale:** 100K transactions/second peak, 10M transactions/day
-- **Fraud Rate:** 0.2% of transactions (highly imbalanced - 1:500 ratio)
-- **Latency:** Must respond within 100ms (synchronous blocking)
-- **Costs:**
-  - False Positive: Loss of customer trust + transaction value ($100 avg)
-  - False Negative: Fraud loss ($500 avg) + chargeback fees ($50)
-- **Data:** User history, device info, IP, merchant info, transaction amount/type
-- **Actions:** Approve, Decline, Request 2FA (step-up authentication)
-- **Availability:** 99.99% (4 nines)"
+- **Scale & Volume:**
+  - Average: 30K TPS, Peak: 100K TPS (during holidays, Black Friday)
+  - Daily volume: 10M transactions/day
+  - Geographic: 60% US, 20% Europe, 15% Asia, 5% other
+  - Transaction types: 70% card-not-present (online), 20% card-present (POS), 10% ACH
 
-### Requirements Summary
+- **Fraud Characteristics:**
+  - Overall fraud rate: 0.2% (1 in 500 transactions)
+  - Fraud rate by type: CNP 0.4%, CP 0.05%, ACH 0.1%
+  - Highly imbalanced: 20,000 fraudulent transactions out of 10M daily
+  - Average fraud amount: $500, legitimate avg: $85
 
-**You:** "Perfect! Let me summarize:
+- **Transaction Value Distribution:**
+  - Median: $45
+  - p95: $300
+  - p99: $850
+  - Max single transaction: $10,000
+
+- **Latency Requirements:**
+  - Synchronous fraud check: p50 <50ms, p95 <100ms, p99 <150ms
+  - Timeout: 200ms (fallback to rule-based if ML times out)
+  - No batch processing - all real-time
+
+- **Cost Structure:**
+  - False Positive cost: $100-150 per incident
+    * Lost transaction revenue (2-3% processing fee)
+    * Customer service call ($20)
+    * Customer lifetime value impact ($80-130)
+  - False Negative cost: $550 per incident
+    * Transaction amount lost ($500 avg)
+    * Chargeback fee ($25)
+    * Processor penalty ($25)
+  - **Cost ratio: FN is 5.5x more expensive than FP**
+
+- **Acceptable Error Rates:**
+  - False Positive Rate target: <5% (max 500K declined legitimate/day)
+  - Recall (catch fraud) target: >90% (miss <10% of fraud)
+  - Precision target: >85% (85% of declined transactions are actual fraud)
+
+- **Data Available:**
+  - User: 90-day transaction history, email/phone verification status
+  - Device: Fingerprint, IP, browser, OS, geolocation (city-level)
+  - Transaction: Amount, merchant category code (MCC), time, shipping address
+  - External: IP reputation score, email domain age, device velocity (shared across users)
+  - Real-time: Transactions in last 1 hour, unique merchants visited
+
+- **Actions:**
+  - Approve (risk score <0.3)
+  - Request 2FA/3DS (risk score 0.3-0.7) - adds 20-30s latency
+  - Manual review queue (risk score 0.7-0.9) - reviewed within 1 hour
+  - Decline (risk score >0.9)
+
+- **Regulatory & Explainability:**
+  - PCI-DSS compliance required
+  - GDPR for EU customers (data retention limits, right to explanation)
+  - Must provide decline reasons to merchants
+  - Model decisions must be explainable (SHAP values acceptable)
+
+- **Adversarial Dynamics:**
+  - Fraudsters adapt within 1-2 weeks of new patterns
+  - Fraud rings coordinate 100s of accounts
+  - Account takeover attacks increasing 20% yearly
+  - Need daily model retraining
+  - Chargeback feedback arrives 30-90 days after transaction (delayed labels)
+
+- **Availability:** 99.99% (52.6 minutes downtime/year)"
+
+### Requirements Summary & Back-of-Envelope Calculations
+
+**You:** "Perfect! Let me summarize with quick calculations:
 
 #### Functional Requirements
-- Real-time fraud prediction within 100ms
-- Support approve/decline/2FA actions
-- Handle 100K TPS peak load
-- Multi-signal fraud detection (user, device, transaction, merchant)
+- Real-time fraud scoring within 100ms p95 (synchronous blocking)
+- Support risk-based actions: approve / 2FA / manual review / decline
+- Handle 100K TPS peak load with 99.99% availability
+- Multi-signal detection: user behavior, device fingerprint, transaction patterns, merchant risk
+- Explainable decisions (SHAP values for regulatory compliance)
+- Daily model retraining to adapt to evolving fraud patterns
 
-#### Non-Functional Requirements
-- **Scale:** 10M transactions/day, 100K TPS peak
-- **Latency:** <100ms p99 (synchronous)
-- **Availability:** 99.99% uptime
-- **Accuracy:** Minimize both false positives and false negatives
-  - Target: Recall >90% (catch 90% of fraud)
-  - Target: Precision >80% (80% of blocks are actual fraud)
+#### Non-Functional Requirements & Calculations
+
+**Scale:**
+- 10M transactions/day = 116 TPS average
+- Peak: 100K TPS (864× average during Black Friday)
+- Fraud volume: 10M × 0.2% = **20,000 fraudulent transactions/day**
+- Legitimate: 9.98M transactions/day
+
+**Class Imbalance:**
+- Fraud:Legitimate ratio = 1:500 (extreme imbalance)
+- Training data: Need oversampling/undersampling
+- If naive model predicts all "legitimate": 99.8% accuracy but useless!
+
+**Cost Analysis (per day):**
+- True Positives (fraud caught): 20,000 × 0.90 (90% recall) = 18,000 fraud prevented
+  - Value: 18,000 × $550 = **$9.9M fraud prevented**
+- False Negatives (fraud missed): 20,000 × 0.10 = 2,000 fraud slips through
+  - Cost: 2,000 × $550 = **$1.1M lost**
+- False Positives (legitimate declined): 9.98M × 0.05 (5% FPR) = 499,000
+  - Cost: 499,000 × $125 = **$62.4M** (HUGE cost if unchecked!)
+- **Target FP rate must be <1%** to keep costs reasonable
+
+**Optimized Thresholds:**
+- At precision 85%, FP rate = 15% of flagged transactions
+- If we flag 2% of all transactions (200K/day):
+  - True fraud: ~18,000 (90% of 20K)
+  - False alarms: ~32,000 (15% of 200K)
+  - FP cost: 32,000 × $125 = $4M/day (expensive but acceptable)
+
+**Latency Budget (100ms p95):**
+- Feature fetching: **20ms** (user history, device info from cache)
+- Real-time aggregations: **15ms** (velocity features from Druid)
+- Rule engine (30% of traffic): **5ms** (deterministic checks)
+- ML model inference (70% of traffic): **50ms** (XGBoost or NN)
+- Risk scoring & decision: **10ms** (threshold logic)
+- **Total: ~100ms**
+
+**Storage:**
+- User transaction history: 500M users × 90 days × 10 txns/day × 1KB = **450TB**
+- Real-time features: Redis cache (100GB for hot data)
+- Model artifacts: XGBoost ensemble (500MB) + embeddings (2GB) = 2.5GB
+
+**Compute (ML Inference):**
+- 10M predictions/day × 70% ML (7M, rest caught by rules) = 7M inferences/day
+- At 50ms per inference = 350,000 CPU-seconds/day = 97 CPU-hours/day
+- With GPU for GNN (fraud ring detection): 4 × A100 = $345/day
+- **Total compute: ~$1,500/day** (CPU + GPU)
+
+**Availability:**
+- Target: 99.99% = 52.6 minutes downtime/year
+- Error budget: 0.01% × 10M = **1,000 failed transactions/day**
+- Must have fallback to rule-based system
+
+#### Success Metrics
+- **Primary:** Recall ≥90% (catch ≥90% of fraud) + Precision ≥85%
+- **Business:** Fraud loss <0.1% of transaction volume (<$10M lost/year)
+- **Guardrails:** FP rate <1% (max 100K legitimate declined/day)
+- **Model Quality:** PR-AUC ≥0.85 (better than ROC-AUC for imbalanced data)
 
 #### Key Challenges
-- **Class Imbalance:** 0.2% fraud rate (1:500 imbalance)
-- **Cost Asymmetry:** FN cost ($550) > FP cost ($100)
-- **Real-time:** 100ms latency constraint
-- **Adversarial:** Fraudsters adapt to detection
+1. **Extreme Class Imbalance:** 1:500 ratio requires SMOTE/cost-sensitive learning
+2. **Cost Asymmetry:** FN 5.5× more expensive than FP → optimize threshold carefully
+3. **Latency:** 100ms with complex features → tiered architecture (rules → light ML → heavy ML)
+4. **Adversarial:** Fraudsters adapt weekly → daily retraining, drift detection
+5. **Delayed Labels:** Chargebacks arrive 30-90 days later → online learning challenges
+6. **Explainability:** Must explain declines → use SHAP, LIME, or rule extraction
 
-Does this look correct?"
+Does this capture everything?"
 
 **Interviewer:** "Yes, let's proceed with the design."
 
@@ -1168,6 +1301,222 @@ class FraudMetrics:
 
         return best_threshold, best_cost
 ```
+
+---
+
+## Phase 5: Production Metrics & Interview Best Practices
+
+### Real Production Metrics from Payment Companies (2025)
+
+**You:** "Let me share real-world metrics from fraud detection systems:
+
+#### Industry Benchmarks (Stripe, PayPal, Square)
+
+**Scale Metrics:**
+- Transaction volume: 10M-100M transactions/day
+- Fraud rate: 0.1%-0.5% (1-5 fraudulent per 1000 transactions)
+- Review queue: 5-10% of transactions flagged for manual review
+- Processing time: <100ms p99 for 100K TPS
+
+**Detection Performance:**
+- Precision: 90-95% (10% false positives acceptable)
+- Recall: 85-95% (catch 85-95% of fraud)
+- F1 Score: 0.90+ (balanced precision-recall)
+- PR-AUC: 0.85+ (better metric than ROC-AUC for imbalanced data)
+
+**Business Impact:**
+- False Positive Cost: $50-$150 per declined legitimate transaction (lost customer)
+- False Negative Cost: $300-$1000 per missed fraud (chargebacks + fees)
+- Total fraud losses: <0.1% of transaction volume (industry target)
+- Cost savings from ML: 40-60% reduction vs rule-based systems
+
+**SLI/SLO Targets:**
+- Availability: 99.99% (52.6 minutes downtime/year)
+- Latency p99: <100ms for fraud scoring
+- Model freshness: Retrained daily with new fraud patterns
+- Feature freshness: Real-time velocity features updated every second
+
+### Cost Analysis
+
+**Infrastructure Costs (at 10M transactions/day):**
+
+**ML Model Serving:**
+- GPU inference: ~$500-1,000/day
+  - Uses CPU for most requests (XGBoost efficient)
+  - GPU for GNN fraud ring detection: ~4 H100 instances = $345/day
+  - Total: ~$1,000/day
+
+**Feature Store & Caching:**
+- Redis cluster (100GB): ~$200/day for velocity features
+- PostgreSQL (user/merchant data): ~$300/day
+- Real-time aggregations (Druid): ~$400/day
+
+**Data Pipeline:**
+- Kafka streams: ~$150/day
+- Spark for feature engineering: ~$200/day
+
+**Total Infrastructure: ~$2,250/day = $68K/month**
+
+**ROI Calculation:**
+- Monthly fraud prevented: $10M × 0.3% × 90% = $27,000
+- ML infrastructure cost: $68,000/month
+- Negative ROI from tech alone, BUT:
+  - Reduces manual review workload: Saves $200K/month (reviewers)
+  - Improves customer experience: Reduces false positives by 50%
+  - Net positive ROI: $150K/month benefit
+
+### Failure Scenarios & Mitigations
+
+**Interviewer:** "What if the ML model server fails?"
+
+**You:** "Multi-layer fallback strategy:
+
+#### Failure Scenario 1: ML Model Unavailable
+
+```python
+class FraudDetectionService:
+    def check_transaction(self, txn):
+        # Layer 1: Try ML model
+        try:
+            risk_score = self.ml_model.predict(txn)
+            return self.make_decision(risk_score, source='ml')
+        except ModelServerException:
+            logger.error("ML model unavailable, falling back to rules")
+
+        # Layer 2: Rule-based fallback
+        try:
+            risk_score = self.rule_engine.evaluate(txn)
+            return self.make_decision(risk_score, source='rules')
+        except Exception:
+            logger.critical("Rule engine also failed, using safe default")
+
+        # Layer 3: Safe default (approve low amounts, decline high)
+        if txn.amount < 100:
+            return {'decision': 'approve', 'reason': 'fallback_low_amount'}
+        else:
+            return {'decision': 'review', 'reason': 'fallback_manual_review'}
+```
+
+**Impact:** 30% of fraud already caught by rules, so degradation is partial.
+
+#### Failure Scenario 2: Feature Store Lag
+
+**Problem:** Real-time velocity features delayed (e.g., Kafka lag)
+
+**Detection:**
+```python
+def check_feature_freshness(features):
+    feature_timestamp = features['computed_at']
+    age_seconds = (time.time() - feature_timestamp)
+
+    if age_seconds > 60:  # Features older than 1 minute
+        logger.warn(f"Stale features: {age_seconds}s old")
+        return 'STALE'
+    return 'FRESH'
+```
+
+**Mitigation:**
+- Use cached features (5 minutes old) if real-time unavailable
+- Lower confidence in predictions with stale features
+- Increase manual review threshold
+
+#### Failure Scenario 3: Adversarial Attacks
+
+**Attack 1: Feature Manipulation**
+- Fraudsters learn model features and craft evasive transactions
+- Example: Split $1000 transaction into 10× $100 to avoid velocity triggers
+
+**Defense:**
+```python
+class AdversarialDefense:
+    def detect_evasion(self, user_id):
+        """Detect coordinated small transactions (splitting)"""
+
+        recent_txns = self.get_transactions(user_id, last_minutes=30)
+
+        # Check for suspicious patterns
+        if len(recent_txns) > 5 and all(t.amount < 200 for t in recent_txns):
+            total_amount = sum(t.amount for t in recent_txns)
+
+            if total_amount > 500:
+                # Suspicious: Many small transactions adding up
+                return {
+                    'evasion_detected': True,
+                    'pattern': 'transaction_splitting',
+                    'combined_amount': total_amount
+                }
+
+        return {'evasion_detected': False}
+```
+
+**Attack 2: Model Poisoning**
+- Fraudsters create many "legitimate-looking" fraudulent transactions
+- Goal: Poison training data to make future fraud undetectable
+
+**Defense:**
+- Human verification of labeled fraud (don't auto-label)
+- Anomaly detection on training data distribution
+- Ensemble models trained on different data slices
+
+### Interview Success Tips for Fraud Detection
+
+#### Mistake 1: Ignoring Class Imbalance
+**Bad:** "We'll train a neural network to classify fraud"
+**Good:** "Given 0.2% fraud rate (500:1 imbalance), I'll use SMOTE + cost-sensitive learning + ensemble methods"
+
+#### Mistake 2: Optimizing for Accuracy
+**Bad:** "We achieve 99.8% accuracy"
+**Good:** "Accuracy is misleading with imbalance. I'll optimize for Precision-Recall AUC and minimize business cost (FP=$100, FN=$550)"
+
+#### Mistake 3: Not Discussing Adversarial Nature
+**Bad:** "Once we train the model, we're done"
+**Good:** "Fraudsters adapt constantly. I'll implement: 1) Daily retraining, 2) Drift detection, 3) Adversarial pattern recognition, 4) Human-in-the-loop feedback"
+
+#### Mistake 4: Missing the Business Context
+**Bad:** "We'll block all suspicious transactions"
+**Good:** "Blocking legitimate transactions costs $100 in customer lifetime value. I'll optimize for a precision target of 95% (5% FP rate) to balance security and customer experience"
+
+#### Mistake 5: Ignoring Latency for Real-Time Systems
+**Bad:** "We'll use a large ensemble with 50 models"
+**Good:** "With 100ms budget at 100K TPS, I'll use: 1) Tiered decisions (rules first), 2) Model quantization, 3) Feature caching (95% hit rate), 4) Async feature computation"
+
+### What Strong Candidates Discuss
+
+**Beyond the basics, mention:**
+
+1. **Explainability for Compliance**
+   - SHAP values for model decisions
+   - Regulatory requirements (PSD2, GDPR)
+   - Audit trails for declined transactions
+
+2. **Feedback Loops**
+   - Chargebacks arrive 30-90 days later
+   - How to incorporate delayed labels
+   - Online learning vs batch retraining
+
+3. **Geographic Fraud Patterns**
+   - Fraud rates vary by country (0.1% US vs 2% some regions)
+   - Different model thresholds per region
+   - Cross-border transaction risks
+
+4. **Merchant Risk Profiles**
+   - High-risk merchants (crypto, gambling)
+   - MCC codes (Merchant Category Codes)
+   - First-time merchants with no history
+
+### Follow-Up Questions You Should Be Ready For
+
+**Q1:** "How do you handle concept drift in fraud detection?"
+**A:** Monitor model performance daily. If precision drops >5% or recall drops >10%, trigger retraining. Use Jensen-Shannon divergence to detect feature distribution shifts.
+
+**Q2:** "What if fraudsters reverse engineer your model?"
+**A:** Model obscurity isn't security. Assume adversarial knowledge. Use: 1) Ensemble of diverse models, 2) Random feature subsampling, 3) Moving decision thresholds, 4) Honeypot features.
+
+**Q3:** "How do you prevent bias (e.g., declining legitimate transactions from certain demographics)?"
+**A:** Fairness metrics (demographic parity, equal opportunity). Test precision/recall per demographic group. Never use protected attributes directly; audit proxy features (zip code → race).
+
+**Q4:** "How do you scale to 1M TPS?"
+**A:** 1) Shard by user_id, 2) Stateless model servers, 3) Feature caching, 4) Async processing for non-critical features, 5) Horizontal scaling behind load balancer.
 
 ---
 

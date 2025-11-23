@@ -1918,6 +1918,57 @@ class CostOptimizer:
 
 ---
 
+## Phase 5: Production Metrics & Best Practices
+
+### Real Production Metrics (RAG Systems 2025)
+
+**Scale (LLM Applications):**
+- Queries: 10K-100K/day for enterprise RAG
+- Documents indexed: 1M-100M documents
+- Latency target: <3 seconds end-to-end (retrieval + LLM)
+- Retrieval latency: <200ms for top-k documents
+
+**LLM Costs (2025 pricing):**
+- GPT-4: ~$30 per 1M input tokens, ~$60 per 1M output tokens
+- Claude 3.5 Sonnet: ~$3 per 1M input tokens, ~$15 per 1M output tokens
+- Typical RAG query: 2K input tokens (context) + 500 output tokens
+- Cost per query: $0.08-0.10 (GPT-4) vs $0.01-0.02 (Claude)
+
+**At 10K queries/day:**
+- GPT-4 cost: ~$25K-30K/month
+- Claude cost: ~$3K-6K/month
+- Vector DB (Pinecone): ~$2K/month
+- Embedding generation: ~$500/month
+
+**Quality Metrics:**
+- Retrieval Precision@5: >80% (5 docs contain answer)
+- LLM Answer Accuracy: >90% when context is relevant
+- Hallucination rate: <5% (with proper prompting + retrieval)
+
+### Cost Optimization Strategies
+
+1. **Hybrid Search:** BM25 (cheap) + Vector (expensive) saves 40%
+2. **Prompt Caching:** Cache system prompts (50% token savings)
+3. **Smaller Models:** Use Llama 3 8B for simple queries (90% cheaper)
+4. **Batch Processing:** Non-urgent queries batched (50% discount)
+5. **Compression:** Compress retrieved context (reduce input tokens 30%)
+
+### Common Interview Mistakes
+
+**Mistake:** "We'll embed all documents and use vector search"
+**Better:** "I'll use hybrid search: BM25 for exact keyword matches + dense vectors for semantic search. This balances speed and accuracy."
+
+**Mistake:** "Just pass all documents to LLM"
+**Better:** "With 100K token context limit and cost per token, I'll:  1) Retrieve top-20 candidates (200ms), 2) Re-rank to top-5 (100ms), 3) Pass only relevant chunks to LLM"
+
+**Q:** "How do you prevent hallucinations?"
+**A:** "Multi-layer strategy: 1) Retrieval quality (high precision), 2) Prompt engineering ('Only use provided context'), 3) Citation tracking (LLM must cite source), 4) Confidence scores, 5) Human-in-the-loop for critical answers"
+
+**Q:** "How do you keep documents up-to-date?"
+**A:** "Incremental updates: 1) Document change detection (hash comparison), 2) Re-embed only changed documents, 3) Update vector index incrementally, 4) TTL-based cache invalidation for frequently changing docs"
+
+---
+
 ## Summary & Key Takeaways
 
 **You:** "To summarize the RAG System design with 2025 innovations:

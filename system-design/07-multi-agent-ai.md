@@ -1033,6 +1033,63 @@ def should_use_multi_agent(task_characteristics):
 
 ---
 
+## Phase 5: Production Metrics & Interview Guidance
+
+### Real Production Metrics (Multi-Agent Systems 2025)
+
+**Scale:**
+- Complex tasks: 100-1000 queries/day per enterprise
+- Agents per task: 3-10 specialized agents
+- Task completion time: 30 seconds to 5 minutes
+- Success rate: 85-95% for well-scoped tasks
+
+**Cost Analysis (GPT-4 based system):**
+- Average task: 5 agents × 3 interactions × 2K tokens = 30K tokens
+- Cost per task: $0.90-1.20 (GPT-4) vs $0.10-0.15 (Claude)
+- At 1000 tasks/month: $900-1200 (GPT-4) vs $100-150 (Claude)
+
+**Coordination Overhead:**
+- Sequential execution: 5 agents × 3s = 15s
+- Parallel execution: max(3s, 3s, 3s) = 3s (5x speedup)
+- Communication overhead: 10-20% additional tokens
+
+**Quality Metrics:**
+- Task completion rate: >90%
+- Agent agreement (consensus): >85%
+- Hallucination detection: 3 agents voting reduces errors by 60%
+
+### Interview Success Tips
+
+**Strong candidates discuss:**
+- When to use multiple agents vs single agent
+- Agent specialization and task decomposition
+- Communication protocols between agents
+- Orchestration patterns (centralized vs decentralized)
+- Cost-benefit analysis of agent coordination overhead
+
+**Mistake:** "We'll use 10 agents for everything"
+**Better:** "Agent count depends on task complexity. Simple Q&A: 1 agent. Research task: 3-5 agents (search, analyze, synthesize). Code generation: 4 agents (planner, coder, reviewer, tester)"
+
+**Q:** "When should you NOT use multi-agent systems?"
+**A:** "When: 1) Task is simple (single agent faster/cheaper), 2) Real-time latency critical (<1s), 3) Agent coordination overhead > benefits, 4) Budget-constrained (agents multiply costs 3-10x)"
+
+**Q:** "How do agents reach consensus?"
+**A:** "Voting mechanisms: 1) Majority voting (3+ agents), 2) Confidence-weighted voting, 3) Debate (agents critique each other), 4) Judge agent makes final decision, 5) Human-in-the-loop for critical decisions"
+
+### Production Considerations
+
+**Failure Handling:**
+- Agent timeout: Fall back to single-agent mode
+- Agent disagreement: Escalate to human or judge agent
+- Infinite loops: Max iteration limits (10-20)
+- Cost explosions: Budget caps per task ($5 max)
+
+**Monitoring:**
+- Track: Agent utilization, task completion time, cost per task, failure patterns
+- Alert if: Success rate <80%, cost >2× baseline, latency >5 minutes
+
+---
+
 ## Summary & Key Takeaways
 
 **You:** "To summarize the Multi-Agent AI System:

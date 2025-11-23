@@ -827,6 +827,48 @@ class AgenticRTBBidder:
 
 ---
 
+## Phase 5: Production Metrics & Interview Guidance
+
+### Real Production Metrics (Google AdX, AppNexus 2025)
+
+**Scale:**
+- 1M-10M bid requests/second globally
+- 100-500 bidders per auction
+- Latency: <100ms p99 for full auction (2024 Agentic RTB: 80% faster)
+- Win rate: 15-30% per bidder (competitive auctions)
+
+**Business Metrics:**
+- Fill rate: >95% (% of requests with at least one bid)
+- Timeout rate: <2% (bidders not responding in time)
+- Budget adherence: 95%+ of campaigns spend within 5% of daily budget
+
+**Cost Analysis (at 1M QPS):**
+- Model serving (CTR, CVR predictions): $10K-15K/day
+- Real-time feature aggregation: $5K/day
+- Auction coordination: $3K/day
+- Total: ~$20K/day = $600K/month
+
+**Agentic RTB Framework (2024):**
+- Traditional RTB latency: 600-800ms
+- Agentic RTB latency: 100ms (6-8x improvement)
+- Method: Co-locate bidder containers with exchange, use gRPC
+
+### Interview Best Practices
+
+**Key topics to cover:**
+- Second-price auction mechanics (incentive-compatible)
+- Budget pacing (spend evenly over 24h, not all in first hour)
+- Multi-objective optimization (CTR, CVR, brand safety)
+- Latency optimization (<100ms budget breakdown)
+
+**Mistake to avoid:** "We'll run ML model on every bid request"
+**Better:** "At 1M QPS, we need tiered strategy: 1) Fast rules (10ms), 2) Lightweight model (30ms), 3) Reserve complex models for high-value auctions only"
+
+**Q:** "How do you prevent budget overspend?"
+**A:** "Real-time spend tracking with circuit breakers. If spend rate > 1.2x expected, probabilistically throttle bids. Use Redis for fast spend aggregation (<5ms lookup)."
+
+---
+
 ## Summary & Key Takeaways
 
 **You:** "To summarize the RTB Ad System:
