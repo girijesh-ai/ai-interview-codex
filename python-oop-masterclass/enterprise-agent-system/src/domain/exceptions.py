@@ -1,8 +1,10 @@
 """
 Domain Exception Classes
 
-Custom exceptions for better error handling and debugging.
+Essential custom exceptions for error handling and debugging.
 Fixes BUG-009: Proper exception handling instead of silent failures.
+
+Kept only exceptions that are actually used or essential for production.
 """
 
 from typing import Any, Dict, Optional
@@ -119,32 +121,6 @@ class BusinessRuleViolation(DomainException):
         )
 
 
-class InvariantViolation(DomainException):
-    """Raised when a domain invariant is violated.
-
-    Invariants are conditions that must always be true.
-    """
-
-    def __init__(
-        self,
-        message: str,
-        invariant: str,
-        **details: Any
-    ):
-        """Initialize invariant violation.
-
-        Args:
-            message: Error message
-            invariant: Name of the violated invariant
-            **details: Additional context
-        """
-        super().__init__(
-            message=message,
-            code="INVARIANT_VIOLATION",
-            details={"invariant": invariant, **details}
-        )
-
-
 # ============================================================================
 # RESOURCE EXCEPTIONS
 # ============================================================================
@@ -204,41 +180,6 @@ class ResourceAlreadyExists(DomainException):
 
 
 # ============================================================================
-# CONCURRENCY EXCEPTIONS
-# ============================================================================
-
-class ConcurrencyConflict(DomainException):
-    """Raised when a concurrent modification conflict occurs."""
-
-    def __init__(
-        self,
-        message: str,
-        resource_type: Optional[str] = None,
-        resource_id: Optional[str] = None,
-        **details: Any
-    ):
-        """Initialize concurrency conflict error.
-
-        Args:
-            message: Error message
-            resource_type: Type of resource with conflict
-            resource_id: ID of the resource
-            **details: Additional context
-        """
-        all_details = details.copy()
-        if resource_type:
-            all_details["resource_type"] = resource_type
-        if resource_id:
-            all_details["resource_id"] = resource_id
-
-        super().__init__(
-            message=message,
-            code="CONCURRENCY_CONFLICT",
-            details=all_details
-        )
-
-
-# ============================================================================
 # AGENT EXCEPTIONS
 # ============================================================================
 
@@ -246,6 +187,7 @@ class AgentExecutionError(DomainException):
     """Raised when an agent fails to execute.
 
     Fixes BUG-009: Silent agent failures.
+    Actually used in src/agents/nodes.py
     """
 
     def __init__(
@@ -283,153 +225,6 @@ class AgentExecutionError(DomainException):
         # Store original exception for __cause__ chain
         if original_error:
             self.__cause__ = original_error
-
-
-class WorkflowError(DomainException):
-    """Raised when a workflow fails to complete."""
-
-    def __init__(
-        self,
-        message: str,
-        workflow_stage: Optional[str] = None,
-        request_id: Optional[str] = None,
-        **details: Any
-    ):
-        """Initialize workflow error.
-
-        Args:
-            message: Error message
-            workflow_stage: Stage where workflow failed
-            request_id: ID of the request being processed
-            **details: Additional context
-        """
-        all_details = details.copy()
-        if workflow_stage:
-            all_details["workflow_stage"] = workflow_stage
-        if request_id:
-            all_details["request_id"] = request_id
-
-        super().__init__(
-            message=message,
-            code="WORKFLOW_ERROR",
-            details=all_details
-        )
-
-
-# ============================================================================
-# INTEGRATION EXCEPTIONS
-# ============================================================================
-
-class ExternalServiceError(DomainException):
-    """Raised when an external service call fails."""
-
-    def __init__(
-        self,
-        message: str,
-        service_name: str,
-        status_code: Optional[int] = None,
-        **details: Any
-    ):
-        """Initialize external service error.
-
-        Args:
-            message: Error message
-            service_name: Name of the external service
-            status_code: HTTP status code (if applicable)
-            **details: Additional context
-        """
-        all_details = {"service_name": service_name, **details}
-        if status_code:
-            all_details["status_code"] = status_code
-
-        super().__init__(
-            message=message,
-            code="EXTERNAL_SERVICE_ERROR",
-            details=all_details
-        )
-
-
-class RateLimitExceeded(DomainException):
-    """Raised when a rate limit is exceeded."""
-
-    def __init__(
-        self,
-        message: str,
-        limit: int,
-        window_seconds: int,
-        retry_after_seconds: Optional[int] = None,
-        **details: Any
-    ):
-        """Initialize rate limit exceeded error.
-
-        Args:
-            message: Error message
-            limit: Number of allowed requests
-            window_seconds: Time window in seconds
-            retry_after_seconds: Seconds until retry is allowed
-            **details: Additional context
-        """
-        all_details = {
-            "limit": limit,
-            "window_seconds": window_seconds,
-            **details
-        }
-        if retry_after_seconds:
-            all_details["retry_after_seconds"] = retry_after_seconds
-
-        super().__init__(
-            message=message,
-            code="RATE_LIMIT_EXCEEDED",
-            details=all_details
-        )
-
-
-# ============================================================================
-# AUTHENTICATION & AUTHORIZATION EXCEPTIONS
-# ============================================================================
-
-class AuthenticationError(DomainException):
-    """Raised when authentication fails."""
-
-    def __init__(self, message: str = "Authentication failed", **details: Any):
-        """Initialize authentication error.
-
-        Args:
-            message: Error message
-            **details: Additional context
-        """
-        super().__init__(
-            message=message,
-            code="AUTHENTICATION_ERROR",
-            details=details
-        )
-
-
-class AuthorizationError(DomainException):
-    """Raised when user lacks required permissions."""
-
-    def __init__(
-        self,
-        message: str = "Insufficient permissions",
-        required_permission: Optional[str] = None,
-        **details: Any
-    ):
-        """Initialize authorization error.
-
-        Args:
-            message: Error message
-            required_permission: Permission that was required
-            **details: Additional context
-        """
-        all_details = details.copy()
-        if required_permission:
-            all_details["required_permission"] = required_permission
-
-        super().__init__(
-            message=message,
-            code="AUTHORIZATION_ERROR",
-            details=all_details
-        )
 
 
 # ============================================================================
