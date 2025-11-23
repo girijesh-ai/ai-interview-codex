@@ -33,6 +33,7 @@ from ..domain.models import (
     Priority,
     Confidence
 )
+from ..domain.exceptions import AgentExecutionError
 
 
 # ============================================================================
@@ -96,7 +97,7 @@ class BaseAgent(ABC):
             })
 
         except Exception as e:
-            # Handle errors
+            # Record error in state for debugging
             state["last_error"] = str(e)
             state["error_count"] = state.get("error_count", 0) + 1
 
@@ -105,8 +106,27 @@ class BaseAgent(ABC):
                 f"{self.agent_type.value}_error_count": 1
             })
 
-            # Log error
-            print(f"Agent {self.agent_type.value} error: {str(e)}")
+            # Log error with context
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(
+                f"Agent {self.agent_type.value} execution failed",
+                exc_info=True,
+                extra={
+                    "agent_type": self.agent_type.value,
+                    "state_id": state.get("request_id", "unknown"),
+                    "error_count": state["error_count"]
+                }
+            )
+
+            # Re-raise as AgentExecutionError to stop workflow
+            # This prevents silent failures and corrupted state propagation
+            raise AgentExecutionError(
+                message=f"Agent {self.agent_type.value} failed to execute: {str(e)}",
+                agent_type=self.agent_type.value,
+                state_id=state.get("request_id"),
+                original_error=e
+            ) from e
 
         finally:
             # Always update timestamp
