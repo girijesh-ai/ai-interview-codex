@@ -73,15 +73,54 @@ This guide simulates a real ML system design interview focused on Real-Time Bidd
 - **Quality:** Basic fraud detection, brand safety checks
 - **Privacy:** GDPR compliant, no PII in bid requests"
 
-### Requirements Summary
+### Requirements Summary & Calculations
 
-**You:** "Perfect! Let me summarize:
+**You:** "Perfect! Let me summarize with key calculations:
 
 #### Functional Requirements
-- Real-time auction for ad impressions
-- Support 100 bidders per auction
-- Second-price auction mechanics
-- Bid optimization (maximize conversions within budget)
+- Real-time auction for ad impressions (OpenRTB protocol)
+- Support 100 bidders per auction (parallel bid requests)
+- Second-price auction: winner pays 2nd highest bid + $0.01
+- Bid optimization: CTR/CVR prediction → bid amount calculation
+- Budget pacing: Spend daily budget evenly over 24 hours
+- Targeting: Match user profile to campaign criteria
+- Fraud detection: Filter invalid traffic before auction
+
+#### Non-Functional Requirements & Calculations
+
+**Scale:**
+- 1M bid requests/second (peak) = **86.4B requests/day**
+- 100 bidders/auction = **100M bidder requests/second**
+- Win rate: 15-30% per bidder → **15-30M ad serves/second**
+
+**Latency Budget (100ms total):**
+- User request arrives: **0ms**
+- Bid request creation: **5ms** (user context, page context)
+- Parallel bidder calls: **60ms** (HTTP to 100 bidders, wait for responses)
+  - Bidder timeout: 50ms (drop slow bidders)
+  - Network RTT: ~10-20ms
+- Auction execution: **10ms** (sort bids, run second-price)
+- Winner notification: **5ms** (send ad creative URL)
+- Ad serving: **20ms** (fetch creative, render)
+- **Total: 100ms**
+
+**Storage:**
+- Active campaigns: 1M campaigns × 10KB = **10GB**
+- User profiles: 500M users × 2KB = **1TB**
+- Bid logs: 86B requests/day × 500 bytes = **43TB/day**
+
+**Compute (ML for CTR/CVR):**
+- 100M bidder predictions/second × 1ms = 100K CPU-seconds/s
+- = 8.6B CPU-hours/day
+- Optimized with caching + lightweight models: **$10K-15K/day**
+
+**Business Metrics:**
+- Fill rate: >95% (at least 1 bid per request)
+- Win rate per bidder: 15-30%
+- Revenue: $2-10 CPM (cost per 1000 impressions)
+- At 86B requests/day: $172M-860M/day revenue (exchange takes 10-20% cut)
+
+#### Key Challenges
 - Budget pacing (daily budget management)
 - Targeting (user demographics, interests, context)
 - Fraud detection and brand safety
