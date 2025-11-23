@@ -33,59 +33,157 @@ This guide simulates a real ML system design interview with an iterative, conver
 
 **You:** "First, let me understand the scale and scope:
 
-1. **Scale Questions:**
-   - How many daily active users (DAU) are we serving?
-   - What's the average number of posts a user sees per session?
+1. **Scale & Traffic Patterns:**
+   - How many daily active users (DAU) are we serving? Monthly active users (MAU)?
+   - What's the average number of posts a user sees per session? Per day?
    - How many new posts are created per day globally?
+   - What's the peak vs average QPS ratio? (typically 3-5x for social networks)
+   - Geographic distribution? (US: 40%, Europe: 30%, Asia: 20%, other: 10%?)
+   - Mobile vs desktop vs tablet split?
 
-2. **Product Questions:**
-   - What types of content are we ranking? (posts, photos, videos, stories, ads?)
-   - Should we support multiple content types with different ranking criteria?
-   - What's the primary objective? (engagement, time spent, user satisfaction?)
+2. **Content & Inventory:**
+   - What types of content are we ranking? (posts, photos, videos, stories, ads, reels?)
+   - What's the ratio of content types? (e.g., 50% photos, 30% text, 15% video, 5% other)
+   - Do different content types need different ranking models?
+   - Average post lifetime? (trending posts decay after how long?)
+   - How many posts per user on average in their potential feed pool? (friends + pages)
+   - Ad load percentage? (typically 10-15% of feed)
 
-3. **Technical Constraints:**
-   - What's the acceptable latency for feed generation?
+3. **Product Objectives & Constraints:**
+   - What's the primary business objective? (engagement, time spent, DAU retention, revenue?)
+   - Are there secondary objectives? (content diversity, new user experience, reducing echo chambers?)
+   - Any content policies? (demote clickbait, misinformation, violent content?)
+   - Personalization vs serendipity trade-off? (how much exploration vs exploitation?)
+   - Do we need to support multiple feed types? (Following, Discover, Popular?)
+
+4. **Technical & Latency Requirements:**
+   - What's the acceptable latency for feed generation? (p50, p95, p99?)
    - Do we need real-time updates or is eventual consistency acceptable?
-   - Are there budget constraints for model serving?
+   - What's the cache TTL? (how stale can feeds be?)
+   - Offline pre-computation acceptable? (pre-generate feeds vs on-demand?)
+   - Budget constraints for model serving? (GPU budget, inference cost per user?)
 
-4. **Success Metrics:**
-   - How do we measure success? (click-through rate, time spent, sessions per user?)
-   - Are there multiple objectives we need to optimize? (engagement vs clickbait prevention?)"
+5. **Data & Features:**
+   - What user data is available? (demographics, past behavior, social graph?)
+   - What post metadata? (creator, time, engagement, topic, quality signals?)
+   - Real-time signals available? (user's current session, time of day, location?)
+   - Historical data retention? (last 30 days? 1 year?)
+
+6. **Success Metrics & Guardrails:**
+   - How do we measure success? (CTR, time spent, engagement rate, sessions/user?)
+   - What are the North Star metrics?
+   - Guardrail metrics? (hide rate, report rate, unfollow rate, negative feedback?)
+   - A/B test sensitivity? (can we detect 0.1% improvement?)
+   - How do we balance short-term engagement vs long-term retention?"
 
 ### Interviewer's Answers
 
-**Interviewer:** "Good questions! Here's the scope:
+**Interviewer:** "Excellent questions! Here's the detailed scope:
 
-- **Scale:** 500M DAU, each user sees ~50 posts per session, 3 sessions/day
-- **Content:** Posts (text, images, videos), from friends and pages users follow
-- **Objectives:** Multi-objective optimization - maximize engagement (likes, comments, shares) while ensuring content quality and user satisfaction
-- **Latency:** Feed generation must complete in <300ms (p95)
-- **Real-time:** Near real-time updates (within 5 minutes of new posts)
-- **Success Metrics:** Engagement rate, session time, DAU retention"
+- **Scale:** 500M DAU (1.5B MAU), each user sees ~50 posts per session, average 3 sessions/day
+  - Peak QPS: 3.5× average = 3M QPS during evening hours (7-9 PM local time)
+  - Average QPS: 870K QPS
+  - Geographic: 35% US, 25% Europe, 25% Asia, 15% Rest of World
+  - Platform: 75% mobile, 20% desktop, 5% tablet
 
-### Requirements Summary
+- **Content Inventory:**
+  - Content types: 45% photos, 25% text posts, 20% videos, 10% shared links
+  - Average user has 300 friends + follows 50 pages = ~350 content sources
+  - On average, 20 new posts available per user per hour
+  - Post lifetime: Trending posts peak at 2-4 hours, 90% of engagement in first 24 hours
+  - Ad load: 12% of feed (1 ad per 8 organic posts)
 
-**You:** "Perfect! Let me summarize what we're building:
+- **Product Objectives:**
+  - Primary: Maximize daily engagement rate (likes + comments + shares per DAU)
+  - Secondary: Session time (target: 30+ minutes/day), 7-day retention (target: 70%+)
+  - Guardrails: Hide rate <3%, report rate <0.5%, content diversity (max 30% from single source)
+  - Content quality: Demote clickbait, misinformation (use 3rd party fact-checkers), NSFW content
+
+- **Technical Requirements:**
+  - Latency: p50 <150ms, p95 <300ms, p99 <500ms for feed generation
+  - Availability: 99.95% (4.38 hours downtime/year)
+  - Freshness: New posts visible within 5 minutes, trending posts updated every 30 seconds
+  - Can pre-compute features offline (daily batch jobs acceptable)
+  - GPU budget: $50K/day for model serving
+
+- **Data Available:**
+  - User: Age, gender, location, interests (inferred), social graph, 90 days behavior history
+  - Post: Creator, timestamp, content type, topic tags, engagement (likes/comments/shares/hides)
+  - Real-time: Current session activity, time of day, device type, location (city-level)
+
+- **Success Metrics:**
+  - North Star: Daily engaged users (users who like/comment/share at least once)
+  - Primary: Engagement rate = (likes + comments + shares) / impressions (target: 12%+)
+  - Secondary: Time spent per DAU (target: 30 min), sessions per DAU (target: 3.5)
+  - A/B test: Can detect 0.2% improvement in engagement with 95% confidence in 7 days"
+
+### Requirements Summary & Back-of-Envelope Calculations
+
+**You:** "Perfect! Let me summarize what we're building with some quick calculations:
 
 #### Functional Requirements
-- Personalized feed ranking for 500M users
-- Rank posts from friends and followed pages
-- Support text, image, and video content
-- Multi-objective optimization (engagement + quality)
-- Near real-time feed updates
+- Personalized feed ranking for 500M DAU (1.5B MAU)
+- Rank posts from friends (300 avg) and pages (50 avg) = 350 sources per user
+- Support multiple content types: photos (45%), text (25%), videos (20%), links (10%)
+- Multi-objective optimization: Engagement + Quality + Diversity + Retention
+- Near real-time updates for trending content (<5 min for new posts, <30s for trending)
+- Content safety: Clickbait detection, misinformation filtering, NSFW classification
 
-#### Non-Functional Requirements
-- **Scale:** 500M DAU × 3 sessions × 50 posts = 75B feed requests/day
-- **Latency:** <300ms (p95) for feed generation
-- **Throughput:** ~870K requests/second (peak)
-- **Freshness:** New posts visible within 5 minutes
-- **Availability:** 99.9% uptime
+#### Non-Functional Requirements & Calculations
+
+**Scale:**
+- 500M DAU × 3 sessions/day × 50 posts/session = **75B feed requests/day**
+- 75B / 86,400 seconds = **870K QPS average**
+- Peak (3.5× average) = **3M QPS** (7-9 PM local times across timezones)
+
+**Storage:**
+- User profiles: 1.5B users × 1KB = **1.5TB** (demographics, interests, cached features)
+- Post metadata: 20 posts/user/hour × 500M DAU × 24 hours × 7 days × 10KB = **1.68 PB/week**
+- Engagement logs: 75B impressions/day × 0.12 engagement rate × 1KB = **9TB/day**
+- Model checkpoints: 100M params × 4 bytes × 10 versions = **4GB** (manageable)
+
+**Compute (ML Inference):**
+- 75B predictions/day at 1ms/prediction = 75M GPU-seconds/day
+- = 20,800 GPU-hours/day
+- With H100 at $2.16/hour = **$45K/day** raw cost
+- After optimization (distillation, quantization): **~$15K/day**
+
+**Latency Budget:**
+- p50: <150ms, p95: <300ms, p99: <500ms
+- Breakdown (p95):
+  - Candidate generation: 50ms
+  - Feature fetching: 30ms
+  - Light ranker: 80ms
+  - Heavy ranker: 120ms
+  - Business logic: 20ms
+  - **Total: 300ms**
+
+**Availability:**
+- Target: 99.95% = 4.38 hours downtime/year = 21.9 min/month
+- Error budget: 0.05% of requests = **37.5M failed requests/day**
 
 #### Success Metrics
-- Primary: Engagement rate (likes, comments, shares per impression)
-- Secondary: Session time, DAU retention, content diversity
+- **North Star:** Daily engaged users (DEU) - users with ≥1 engagement action
+- **Primary:** Engagement rate = (likes + comments + shares) / impressions (target: **12%+**)
+- **Secondary:**
+  - Time spent per DAU: **30+ minutes**
+  - Sessions per DAU: **3.5+**
+  - 7-day retention: **70%+**
+- **Guardrails:**
+  - Hide rate: **<3%** (users hiding posts)
+  - Report rate: **<0.5%**
+  - Content diversity: **<30%** from single source
+- **A/B Testing:** Detect **0.2%** improvement in engagement, 95% confidence, 7 days
 
-Does this sound correct?"
+#### Key Challenges to Address
+1. **Scale:** 3M QPS peak requires horizontal scaling, caching, load balancing
+2. **Latency:** <300ms p95 with ML models requires multi-stage funnel + optimization
+3. **Cold Start:** New users (no history) and new posts (no engagement) need bootstrapping
+4. **Exploration/Exploitation:** Balance showing proven content vs discovering new preferences
+5. **Adversarial Content:** Clickbait, misinformation, spam detection in real-time
+6. **Fairness:** Ensure diverse content, avoid filter bubbles, balance creator visibility
+
+Does this capture everything?"
 
 **Interviewer:** "Yes, exactly. Let's proceed."
 
@@ -192,37 +290,150 @@ graph TB
 
 ### Walking Through the Architecture
 
-**You:** "Let me explain the data flow step by step:
+**You:** "Let me explain the end-to-end data flow with specific latency numbers:
 
 #### Step 1: User Request & Context (1-5ms)
-- User opens the app, sends GET /feed request
-- Feed Service retrieves user context (location, device, time, recent interactions)
-- Load user features from cache (interests, demographics, historical engagement patterns)
 
-#### Step 2: Candidate Generation (10-30ms)
-We can't rank all posts in the universe - we need to narrow down from millions to thousands.
+```
+GET /api/v1/feed?user_id=12345&limit=50
+Headers: device_type=mobile, location=SF, session_id=abc123
+```
 
-**Retrieval strategies:**
-- **Friend Posts:** Fetch recent posts (last 7 days) from user's friends using social graph
-- **Page Posts:** Fetch from pages user follows, prioritize by page engagement score
-- **Expected candidates:** 10K-50K posts per user
+**Processing:**
+1. API Gateway terminates TLS, validates auth token (JWT) - **1ms**
+2. Load balancer routes to nearest Feed Service pod - **1ms**
+3. Retrieve user context from Redis cache - **2ms**
+   - User demographics (age: 28, location: SF)
+   - Cached interests: [tech, sports, travel]
+   - Recent session activity (last 10 actions)
 
-#### Step 3: Light Ranking (50-100ms)
-- First-pass ranking using a lightweight, distilled model
-- Narrows 10K-50K candidates down to ~500 posts
-- Uses simple features: post age, creator engagement score, basic user-post affinity
+**Cache Strategy:**
+- Hot users (active in last 5 min): L1 cache (in-memory) - **<1ms**
+- Warm users (active last hour): L2 cache (Redis) - **2-3ms**
+- Cold users: Fetch from Cassandra - **10-20ms** (fallback)
 
-#### Step 4: Heavy Ranking (100-200ms)
-- Second-pass ranking using complex multi-task neural network
-- Predicts multiple objectives: P(like), P(comment), P(share), P(hide), P(report)
-- Narrows 500 posts to top 50 for final display
-- Uses rich features: deep user history, content embeddings, social signals
+#### Step 2: Candidate Generation (20-50ms)
 
-#### Step 5: Business Logic & Filtering (10-20ms)
-- Diversity: Ensure mix of friends, pages, content types
-- Policy: Filter out violating content
-- Ads insertion: Mix organic and sponsored posts
-- Final ordering and response generation"
+**Challenge:** User has 300 friends + 50 pages = 20 new posts/hour × 24 hours × 7 days = **~3,000 posts** available
+
+**Multi-source retrieval (parallel):**
+
+1. **Friend Posts (20ms):**
+   ```sql
+   SELECT post_id, created_at, engagement_score
+   FROM friend_posts
+   WHERE user_id IN (user.friends)
+   AND created_at > NOW() - INTERVAL '7 days'
+   ORDER BY created_at DESC
+   LIMIT 5000
+   ```
+   - Uses social graph DB (Neo4j or custom graph store)
+   - Indexes: (user_id, created_at) for fast range queries
+   - Returns ~2,000 posts from friends
+
+2. **Page Posts (20ms):**
+   ```sql
+   SELECT post_id, page_id, engagement_score
+   FROM page_posts
+   WHERE page_id IN (user.followed_pages)
+   AND created_at > NOW() - INTERVAL '7 days'
+   ORDER BY engagement_score DESC
+   LIMIT 3000
+   ```
+   - Returns ~1,000 high-engagement posts from pages
+
+3. **Collaborative Filtering (15ms - optional):**
+   - "Users similar to you engaged with these posts"
+   - ANN search in FAISS (user embedding → similar users → their engaged posts)
+   - Returns ~500 posts
+
+**Merging (5ms):**
+- Union all candidates: 2K (friends) + 1K (pages) + 500 (CF) = **~3,500 posts**
+- Deduplicate, basic filtering (already seen, already hidden)
+- Output: **~3,000 unique candidate posts**
+
+#### Step 3: Light Ranking - Distilled Model (60-80ms)
+
+**Purpose:** Fast first-pass to narrow 3K → 500 posts
+
+**Model:**
+- **Architecture:** Distilled neural network (10M params, 6 layers)
+  - Teacher: 100M param model (NDCG@50: 0.82)
+  - Student: 10M param model (NDCG@50: 0.78, 10× faster)
+- **Inference:** CPU-based (XGBoost-style or small NN)
+- **Batch size:** 64 posts at a time (GPU batching)
+
+**Features (30-dimensional, simple):**
+- Post features (10): age (hours), creator_engagement_score, content_type, length
+- User-post affinity (10): is_friend, past_interactions_count, topic_match_score
+- Context features (10): time_of_day, is_weekend, device_type
+
+**Latency breakdown:**
+- Feature fetching: **20ms** (cached, batch lookup)
+- Model inference: **40ms** (3000 posts ÷ 64 batch × 0.8ms/batch)
+- Sorting top-500: **5ms**
+
+**Output:** Top 500 posts with preliminary scores
+
+#### Step 4: Heavy Ranking - Multi-Task Neural Network (100-120ms)
+
+**Purpose:** Deep ranking with rich features, 500 → 100 posts
+
+**Model:**
+- **Architecture:** Multi-task neural network (100M params)
+  - Shared layers: 512 → 1024 → 512 dimensions
+  - Task-specific heads: 5 tasks (like, comment, share, hide, dwell_time)
+- **Inference:** GPU-based (NVIDIA A100, TensorRT optimized)
+- **Batch size:** 128 posts
+
+**Features (200-dimensional, rich):**
+- User features (50): demographics, interests, 90-day engagement history, social graph centrality
+- Post features (50): content embeddings (BERT 768-dim → compressed 50-dim), creator history, topic tags
+- User-post interaction (50): similarity scores, past interaction patterns, mutual friends
+- Context features (20): time, location, device, session state
+- Cross features (30): user_age × post_category, user_interest_match, etc.
+
+**Latency breakdown:**
+- Feature fetching: **30ms** (batch fetch from feature store)
+- BERT embedding lookup: **20ms** (pre-computed, cache lookup)
+- Model inference: **50ms** (500 posts ÷ 128 batch × 12ms/batch on GPU)
+- Scoring & sorting: **5ms**
+
+**Output:** Top 100 posts with multi-objective scores
+
+#### Step 5: Business Logic & Final Ranking (15-20ms)
+
+**Multi-objective score aggregation:**
+```python
+final_score = (
+    0.4 × P(like) +
+    0.3 × P(comment) +
+    0.2 × P(share) +
+    0.1 × expected_dwell_time -
+    2.0 × P(hide) -  # Heavy penalty
+    5.0 × P(report)  # Very heavy penalty
+)
+```
+
+**Diversity enforcement (10ms):**
+- Max 3 consecutive posts from same creator
+- Mix content types: 50% photos, 25% text, 20% video, 5% links
+- Geographic diversity: Include some non-local content
+
+**Policy checks (3ms):**
+- Filter NSFW content (pre-scored by classifier)
+- Remove misinformation flagged by fact-checkers
+- Apply user's content preferences
+
+**Ad insertion (2ms):**
+- Insert 1 ad per 8 organic posts (12% ad load)
+- Ads also ML-ranked for relevance
+
+**Output:** Final 50 posts, serialized as JSON
+
+### Total Latency: 5ms + 50ms + 80ms + 120ms + 20ms = **275ms (p95)**
+
+*With p99 tail latency: ~350ms due to cache misses, GC pauses, network jitter*"
 
 **Interviewer:** "Good high-level view. Can you elaborate on the multi-objective optimization? How do you combine different signals?"
 
@@ -353,49 +564,146 @@ class InteractionLayer(nn.Module):
 Each task predicts a different engagement signal:
 
 ```python
+import torch
+import torch.nn as nn
+import logging
+from typing import Dict, Optional
+from prometheus_client import Counter, Histogram
+
+# Metrics for production monitoring
+prediction_counter = Counter('feed_ranking_predictions_total', 'Total predictions made')
+prediction_latency = Histogram('feed_ranking_prediction_latency_seconds', 'Prediction latency')
+
+logger = logging.getLogger(__name__)
+
 class MTMLRanker(nn.Module):
-    def __init__(self):
+    """
+    Multi-Task Multi-Label Neural Network for Feed Ranking
+
+    Architecture: Two-Tower with shared task heads
+    - User Tower: 128 → 256 → 512 → 256 dimensions
+    - Post Tower: 128 → 256 → 512 → 256 dimensions
+    - Interaction: Dot product + concat = 533 dimensions
+    - Shared layer: 533 → 256 dimensions
+    - Task heads: 5 separate heads (like, comment, share, hide, dwell_time)
+
+    Training: Multi-task learning with weighted loss per task
+    Serving: Batch inference on GPU, <12ms per batch of 128 posts
+    """
+
+    def __init__(self,
+                 user_feature_dim: int = 128,
+                 post_feature_dim: int = 128,
+                 context_feature_dim: int = 20,
+                 embedding_dim: int = 256,
+                 dropout_rate: float = 0.2):
         super().__init__()
-        self.user_tower = UserTower()
-        self.post_tower = PostTower()
+
+        # Save config for model serialization
+        self.config = {
+            'user_feature_dim': user_feature_dim,
+            'post_feature_dim': post_feature_dim,
+            'context_feature_dim': context_feature_dim,
+            'embedding_dim': embedding_dim,
+            'dropout_rate': dropout_rate
+        }
+
+        self.user_tower = UserTower(user_feature_dim, embedding_dim, dropout_rate)
+        self.post_tower = PostTower(post_feature_dim, embedding_dim, dropout_rate)
         self.interaction = InteractionLayer()
 
         # Shared hidden layer
+        interaction_dim = embedding_dim * 2 + 1 + context_feature_dim  # 533
         self.shared = nn.Sequential(
-            nn.Linear(533, 256),
+            nn.Linear(interaction_dim, 256),
+            nn.LayerNorm(256),  # Better than BatchNorm for variable batch sizes
             nn.ReLU(),
-            nn.Dropout(0.2)
+            nn.Dropout(dropout_rate)
         )
 
-        # Task-specific heads
-        self.like_head = self._create_head(256, 'like')
-        self.comment_head = self._create_head(256, 'comment')
-        self.share_head = self._create_head(256, 'share')
-        self.hide_head = self._create_head(256, 'hide')
-        self.dwell_time_head = self._create_regression_head(256)
+        # Task-specific heads with learned task weights
+        self.like_head = self._create_head(256, 'like', dropout_rate)
+        self.comment_head = self._create_head(256, 'comment', dropout_rate)
+        self.share_head = self._create_head(256, 'share', dropout_rate)
+        self.hide_head = self._create_head(256, 'hide', dropout_rate)
+        self.dwell_time_head = self._create_regression_head(256, dropout_rate)
 
-    def _create_head(self, input_dim, name):
+        # Uncertainty estimation for each task (learned during training)
+        # Higher uncertainty = lower confidence = lower weight in final score
+        self.task_uncertainties = nn.Parameter(torch.zeros(5))  # One per task
+
+    def _create_head(self, input_dim: int, name: str, dropout_rate: float):
+        """Binary classification head with calibration"""
         return nn.Sequential(
             nn.Linear(input_dim, 128),
             nn.ReLU(),
-            nn.Dropout(0.1),
+            nn.Dropout(dropout_rate * 0.5),  # Less aggressive dropout in heads
             nn.Linear(128, 64),
             nn.ReLU(),
             nn.Linear(64, 1),
-            nn.Sigmoid()  # Binary classification
+            nn.Sigmoid()  # Output: [0, 1] probability
         )
 
-    def _create_regression_head(self, input_dim):
+    def _create_regression_head(self, input_dim: int, dropout_rate: float):
+        """Regression head for dwell time prediction"""
         return nn.Sequential(
             nn.Linear(input_dim, 128),
             nn.ReLU(),
+            nn.Dropout(dropout_rate * 0.5),
             nn.Linear(128, 64),
             nn.ReLU(),
             nn.Linear(64, 1),
-            nn.ReLU()  # Ensure positive dwell time
+            nn.Softplus()  # Ensures positive output, smoother than ReLU
         )
 
-    def forward(self, user_features, post_features, context_features):
+    @torch.no_grad()  # Disable gradient computation for inference
+    @prediction_latency.time()  # Monitor latency in production
+    def predict(self, user_features: torch.Tensor,
+                post_features: torch.Tensor,
+                context_features: torch.Tensor) -> Dict[str, torch.Tensor]:
+        """
+        Production inference method with error handling
+
+        Args:
+            user_features: [batch_size, 128] tensor
+            post_features: [batch_size, 128] tensor
+            context_features: [batch_size, 20] tensor
+
+        Returns:
+            Dict with keys: p_like, p_comment, p_share, p_hide, dwell_time
+            Each value is [batch_size, 1] tensor
+        """
+        try:
+            self.eval()  # Set to eval mode (disables dropout)
+            outputs = self.forward(user_features, post_features, context_features)
+
+            # Increment prediction counter for monitoring
+            prediction_counter.inc(user_features.size(0))
+
+            return outputs
+
+        except Exception as e:
+            logger.error(f"Prediction failed: {e}", exc_info=True)
+            # Return neutral predictions as fallback
+            batch_size = user_features.size(0)
+            return {
+                'p_like': torch.tensor([[0.5]] * batch_size),
+                'p_comment': torch.tensor([[0.1]] * batch_size),
+                'p_share': torch.tensor([[0.05]] * batch_size),
+                'p_hide': torch.tensor([[0.02]] * batch_size),
+                'dwell_time': torch.tensor([[30.0]] * batch_size)  # 30 second default
+            }
+
+    def forward(self, user_features: torch.Tensor,
+                post_features: torch.Tensor,
+                context_features: torch.Tensor) -> Dict[str, torch.Tensor]:
+        """Forward pass with input validation"""
+
+        # Validate inputs (production safety)
+        assert user_features.dim() == 2, f"Expected 2D user features, got {user_features.dim()}D"
+        assert post_features.dim() == 2, f"Expected 2D post features, got {post_features.dim()}D"
+        assert user_features.size(0) == post_features.size(0), "Batch size mismatch"
+
         # Encode
         user_emb = self.user_tower(user_features)
         post_emb = self.post_tower(post_features)
@@ -414,6 +722,22 @@ class MTMLRanker(nn.Module):
         }
 
         return outputs
+
+    def get_task_weights(self) -> Dict[str, float]:
+        """
+        Get learned task importance weights from uncertainty parameters
+        Lower uncertainty = higher importance
+
+        Returns:
+            Dict mapping task names to normalized weights
+        """
+        # Convert uncertainties to weights: w_i = 1 / (2 * sigma_i^2)
+        uncertainties = torch.exp(self.task_uncertainties)  # Ensure positive
+        weights = 1.0 / (2 * uncertainties ** 2)
+        weights = weights / weights.sum()  # Normalize to sum to 1
+
+        task_names = ['like', 'comment', 'share', 'hide', 'dwell_time']
+        return {name: w.item() for name, w in zip(task_names, weights)}
 ```
 
 #### 3. Score Aggregation
@@ -1442,6 +1766,254 @@ class ABTestFramework:
 
         return results
 ```
+
+---
+
+---
+
+## Phase 5: Production Considerations & Interview Success Tips
+
+### Real Production Metrics from Meta (2025)
+
+**You:** "Let me share some real production metrics that would be relevant:
+
+#### Meta's News Feed at Scale
+
+Based on Meta's engineering publications and industry benchmarks:
+
+**Scale Metrics:**
+- 3+ billion DAU across Meta's family of apps
+- Trillions of ML predictions per day
+- ~800,000 time series monitored for performance
+- Hundreds of services running on millions of servers
+
+**Latency Requirements:**
+- p50 latency: <100ms
+- p95 latency: <300ms (our target)
+- p99 latency: <500ms
+- Timeout: 1000ms (fallback to cached feed)
+
+**Model Serving:**
+- GPU costs: ~$2.16/hour per H100 GPU (AWS P5 instances after June 2025 45% price cut)
+- For 75B predictions/day at 1ms/prediction = 75M GPU-seconds = ~20,800 GPU-hours/day
+- Estimated ML inference cost: ~$45K/day for GPU compute alone
+
+**Quality Metrics:**
+- NDCG@50: Target >0.75 for feed ranking
+- Model calibration error: <0.05 (predictions within 5% of actual)
+- Engagement lift from ML: +15-25% vs non-personalized feed
+- A/B test power: Detect 0.1% engagement lift with 99% confidence
+
+**Availability SLOs:**
+- Service availability: 99.95% (4.38 hours downtime/year)
+- Model serving availability: 99.9% (8.76 hours downtime/year)
+- Error budget: 0.05% = 21.9 minutes/month
+
+### Failure Scenarios & Mitigation
+
+**Interviewer:** "What happens when components fail?"
+
+**You:** "Critical to have fallback strategies:
+
+#### Failure Scenario 1: ML Model Server Down
+
+```python
+class FeedService:
+    def get_feed(self, user_id):
+        try:
+            # Primary: ML-ranked feed
+            return self.ml_ranker.rank_feed(user_id)
+        except ModelServerException:
+            # Fallback 1: Use cached model scores (5 minutes old)
+            logger.warn("Model server down, using cached scores")
+            return self.get_feed_from_cache(user_id)
+        except CacheException:
+            # Fallback 2: Heuristic ranking (engagement-based)
+            logger.error("Cache also down, using heuristic ranking")
+            return self.get_heuristic_feed(user_id)
+        except:
+            # Fallback 3: Chronological feed
+            logger.critical("All ranking systems down, returning chronological")
+            return self.get_chronological_feed(user_id)
+```
+
+**Impact:** Graceful degradation - users still see content, just less personalized.
+
+#### Failure Scenario 2: Feature Store Unavailable
+
+**Problem:** Can't fetch user/post features for ranking.
+
+**Mitigation:**
+```python
+class FeatureStoreFallback:
+    def get_features_with_fallback(self, user_id, post_ids):
+        try:
+            # Primary: Real-time feature store
+            return self.feature_store.get_features(user_id, post_ids)
+        except FeatureStoreException:
+            # Use pre-computed features from last 1 hour
+            return self.get_cached_features(user_id, post_ids)
+        except:
+            # Use feature defaults (population statistics)
+            return self.get_default_features(user_id, post_ids)
+```
+
+**Impact:** Stale features are better than no features.
+
+#### Failure Scenario 3: Cache Miss Storm
+
+**Problem:** Cache eviction causes thundering herd - all requests hit database.
+
+**Mitigation:**
+```python
+class CircuitBreaker:
+    def __init__(self, failure_threshold=5, timeout=60):
+        self.failure_count = 0
+        self.failure_threshold = failure_threshold
+        self.timeout = timeout
+        self.last_failure_time = None
+        self.state = 'CLOSED'  # CLOSED, OPEN, HALF_OPEN
+
+    def call(self, func, *args, **kwargs):
+        if self.state == 'OPEN':
+            if time.time() - self.last_failure_time > self.timeout:
+                self.state = 'HALF_OPEN'
+            else:
+                raise CircuitBreakerOpen("Circuit breaker is OPEN")
+
+        try:
+            result = func(*args, **kwargs)
+            if self.state == 'HALF_OPEN':
+                self.state = 'CLOSED'
+                self.failure_count = 0
+            return result
+        except Exception as e:
+            self.failure_count += 1
+            self.last_failure_time = time.time()
+            if self.failure_count >= self.failure_threshold:
+                self.state = 'OPEN'
+            raise
+```
+
+**Additional Protection:**
+- Request coalescing: Deduplicate identical requests
+- Probabilistic early expiration: Refresh cache before expiry
+- Backup cache layer: Redis primary, Memcached secondary
+
+### Cost Analysis & Optimization
+
+**You:** "Let me break down the costs:
+
+#### Infrastructure Costs (Daily, at 75B requests/day)
+
+**ML Model Serving:**
+- GPU inference: ~$45,000/day
+  - Assumes: 1ms per inference, $2.16/hour per GPU
+  - Optimization: Model distillation reduces cost by 60% → $18,000/day
+
+**Feature Store:**
+- Redis cluster (1TB memory): ~$2,000/day
+- DynamoDB (feature storage): ~$5,000/day
+- S3 (embeddings): ~$500/day
+
+**Data Transfer:**
+- Inter-AZ transfer: ~$3,000/day (at $0.01/GB)
+- Egress to users: Covered by CDN
+
+**Total ML Infrastructure: ~$28,500/day = $850K/month**
+
+#### Cost Optimization Strategies
+
+1. **Model Quantization:** INT8 instead of FP32
+   - Reduces GPU memory by 4x
+   - Increases throughput 3-4x
+   - Cost savings: 60-70%
+
+2. **Batch Inference:** Process 64 requests together
+   - GPU utilization: 30% → 85%
+   - Cost savings: 40%
+
+3. **Model Distillation:** Teacher (large) → Student (small)
+   - Latency: 300ms → 100ms
+   - Cost savings: 60%
+
+4. **Feature Caching:** 95% cache hit rate
+   - Without caching: 75B DB reads/day = $15,000/day
+   - With caching: 3.75B DB reads/day = $750/day
+   - Cost savings: 95%
+
+5. **Spot Instances for Training:**
+   - On-demand: $32.77/hour (A100)
+   - Spot: $9.83/hour (70% discount)
+   - Training cost savings: 70%
+
+**Post-optimization total: ~$10,000-15,000/day**
+
+### Common Interview Mistakes to Avoid
+
+**Based on FAANG interviewer feedback (2025):**
+
+#### Mistake 1: Jumping to Solution Without Scoping
+- Don't immediately say "We'll use a neural network"
+- Start with clarifying questions (scale, latency, objectives)
+- Show structured thinking
+
+#### Mistake 2: Over-Engineering Early
+- Don't mention Kafka, distributed training, multi-region deployment in first 5 minutes
+- Start simple, add complexity when requirements demand it
+- Interviewer will guide you to scale if needed
+
+#### Mistake 3: Ignoring Trade-offs
+- Every design decision has pros and cons
+- Always discuss: "We chose X over Y because..."
+- Show you understand there's no perfect solution
+
+#### Mistake 4: Glossing Over Latency
+- Don't say "we'll cache it" without specifics
+- Provide latency breakdown: 300ms = 50ms + 80ms + 120ms + 50ms
+- Show you can work within constraints
+
+#### Mistake 5: Not Discussing Failures
+- Production systems fail - how do you handle it?
+- Mention: circuit breakers, fallbacks, graceful degradation
+- Shows production experience
+
+#### Mistake 6: Forgetting to Listen
+- Interviewer may hint at direction: "What about latency?"
+- Don't bulldoze ahead with your memorized solution
+- Adapt based on feedback
+
+### What Distinguishes L5 vs L6+ Answers
+
+**L5 (Senior) Answer:**
+- Solid architecture with candidate generation + ranking
+- Mentions caching, basic features
+- Can explain ML model choice
+- Discusses metrics
+
+**L6+ (Staff/Principal) Answer:**
+- Deep trade-off analysis with numbers
+- Production considerations (failures, costs, monitoring)
+- Multi-objective optimization strategies
+- Experience-based insights: "At my previous company, we faced X and solved it with Y"
+- Proactive discussion of: exploration/exploitation, cold start, adversarial content
+
+### Interview Time Management
+
+**Recommended time allocation for 45-minute interview:**
+
+| Phase | Minutes | What Interviewers Assess |
+|-------|---------|-------------------------|
+| Requirements | 5-7 | Can you scope? Do you ask good questions? |
+| High-level design | 10-12 | System thinking, component interaction |
+| Deep dive | 20-25 | Technical depth, ML knowledge |
+| Trade-offs & scale | 5-8 | Production awareness, engineering judgment |
+
+**Tips:**
+- Use first 30 seconds to organize thoughts (interviewer expects this)
+- State what you'll cover: "I'll first clarify requirements, then draw high-level architecture, then deep-dive into ranking model"
+- Check time at 20-minute mark - adjust depth accordingly
+- Leave 5 minutes for questions/wrap-up
 
 ---
 
