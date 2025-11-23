@@ -33,51 +33,157 @@ This guide simulates a real ML system design interview focused on search ranking
 
 **You:** "Let me understand the requirements:
 
-1. **Use Case & Scale:**
-   - What are we searching? (web pages, products, videos, documents?)
-   - How many items in the corpus? (millions, billions?)
-   - How many queries per second?
-   - What's the query distribution? (head, torso, tail queries)
+1. **Use Case & Corpus:**
+   - What are we searching? (web pages, products, videos, documents, images?)
+   - Corpus size? (millions, billions of items?)
+   - How frequently does corpus change? (hourly, daily updates?)
+   - Query distribution? (20% head queries, 30% torso, 50% long-tail?)
+   - Query characteristics? (avg query length, typos frequency, multi-language?)
 
-2. **Latency & Quality:**
-   - What's the acceptable latency for search results?
-   - How many results to return per page?
-   - Do we support pagination?
-   - Real-time indexing needed or batch updates?
+2. **Scale & Traffic:**
+   - Queries per second (QPS)? Peak vs average?
+   - Geographic distribution? (single region or global?)
+   - Platform split? (web, mobile app, API)
+   - Seasonality? (Black Friday spikes, holiday traffic)
 
-3. **Ranking Objectives:**
-   - What defines relevance? (clicks, dwell time, conversions?)
-   - Are there multiple objectives? (relevance, freshness, diversity, monetization?)
-   - Personalized or uniform ranking?
+3. **Latency & Performance:**
+   - Acceptable latency for results? (p50, p95, p99)
+   - How many results per page? (10, 20, 100?)
+   - Pagination support? (infinite scroll or page-based?)
+   - Autocomplete/suggest needed? (what latency?)
 
-4. **Technical Constraints:**
-   - Existing infrastructure? (Elasticsearch, Solr, custom?)
-   - Budget for ML inference?
-   - Can we use transformer models (BERT) or limited to classical ML?"
+4. **Ranking Quality & Objectives:**
+   - How do we define relevance? (clicks, dwell time, conversions, ratings?)
+   - Multiple objectives? (relevance, freshness, diversity, revenue, brand safety?)
+   - Personalization level? (based on user history, location, preferences)
+   - Cold start: how to rank for new users or new items?
+
+5. **Query Understanding:**
+   - Spell correction needed? (typo tolerance)
+   - Synonym expansion? ("phone" → "smartphone", "mobile")
+   - Query intent detection? (navigational, informational, transactional)
+   - Multi-language support?
+
+6. **Indexing & Freshness:**
+   - Real-time indexing required? (new items visible immediately?)
+   - Index update frequency? (seconds, minutes, hours?)
+   - How to handle deleted/out-of-stock items?
+
+7. **Technical Constraints:**
+   - Existing search infrastructure? (Elasticsearch, Solr, Algolia, custom?)
+   - ML inference budget? (GPU costs acceptable?)
+   - Can we use heavy models? (BERT, transformers) or need lightweight?
+   - Storage budget for indexes and embeddings?"
 
 ### Interviewer's Answers
 
 **Interviewer:** "Good questions! Here's the scope:
 
-- **Use Case:** E-commerce product search (like Amazon)
-- **Scale:** 100M products in catalog, 50K queries/second peak
-- **Latency:** Return results in <200ms (p95)
-- **Results:** Top 20 products per query, support pagination
-- **Objectives:** Optimize for purchases (primary) and clicks (secondary)
-- **Personalization:** Yes, use user history
-- **Indexing:** Near real-time (new products visible in <5 minutes)
-- **Budget:** Can use BERT for final ranking, but need efficient retrieval"
+- **Use Case:** E-commerce product search (like Amazon/eBay)
+- **Corpus:** 100M products, growing 10K/day, 5% churn monthly
+- **Scale:** Average 20K QPS, Peak 50K QPS (Black Friday 3× spike)
+- **Query Distribution:**
+  - Head (20%): "iPhone", "laptop", "shoes" - 10M queries/day
+  - Torso (30%): "wireless bluetooth headphones" - 15M queries/day
+  - Long-tail (50%): "waterproof hiking boots size 10.5" - 25M queries/day
+- **Query Characteristics:** Avg length 3-4 words, 15% contain typos
 
-### Requirements Summary
+- **Latency Requirements:**
+  - Search results: p50 <100ms, p95 <200ms, p99 <300ms
+  - Autocomplete: p95 <50ms
+  - Return top 20 products per page, support 50 pages (1000 results total)
 
-**You:** "Perfect! Let me summarize:
+- **Ranking Objectives:**
+  - Primary: Conversion rate (purchases per impression)
+  - Secondary: Click-through rate (CTR)
+  - Tertiary: Revenue (price × conversion_prob)
+  - Constraints: Diversity (max 3 from same brand), freshness (boost new products)
+
+- **Personalization:**
+  - Use 90-day purchase/browse history
+  - Location-based (show items that ship to user's region)
+  - Price sensitivity (infer from user's past purchases)
+
+- **Query Understanding:**
+  - Spell correction: "ipone" → "iphone"
+  - Synonym expansion: "phone" → ["smartphone", "mobile", "cell phone"]
+  - Intent detection: brand search vs product search
+  - Multi-language: English primarily, Spanish support
+
+- **Indexing:**
+  - New products visible in <5 minutes
+  - Inventory updates (out-of-stock) in <1 minute
+  - Price updates in real-time (via cache invalidation)
+
+- **Infrastructure:**
+  - Can use Elasticsearch for retrieval
+  - GPU budget: $10K/day for ML ranking
+  - Can use BERT for final ranking (top-500 products only)
+
+- **Success Metrics:**
+  - NDCG@20 >0.85 (ranking quality)
+  - Zero-result rate <5% (query understanding quality)
+  - Conversion lift: +15% vs baseline ranking"
+
+### Requirements Summary & Back-of-Envelope Calculations
+
+**You:** "Perfect! Let me summarize with calculations:
 
 #### Functional Requirements
-- Search 100M products with natural language queries
-- Return top 20 relevant products per query
-- Personalized ranking based on user history
-- Support for filters (price, category, rating)
-- Near real-time indexing (<5 min for new products)
+- Search 100M products with natural language queries (3-4 words avg)
+- Multi-stage ranking: Retrieval (100M → 10K) → Light ranking (10K → 500) → BERT (500 → 20)
+- Personalized ranking based on 90-day user history
+- Query understanding: Spell correction, synonyms, intent detection
+- Filters: price range, category, brand, rating, availability
+- Near real-time indexing (<5 min for new products, <1 min for inventory)
+
+#### Non-Functional Requirements & Calculations
+
+**Scale:**
+- 50K QPS peak × 3600 seconds × 24 hours = **4.3B queries/day**
+- 100M products × 1KB metadata = **100GB** product data
+- User base: ~500M users (assume 1% active daily = 5M DAU)
+
+**Storage:**
+- Product metadata: 100M × 1KB = **100GB**
+- Product embeddings: 100M × 768 dim × 4 bytes = **307GB** (BERT embeddings)
+- Inverted index (Elasticsearch): ~5× raw data = **500GB**
+- User history: 500M users × 90 days × 10 actions/day × 100 bytes = **4.5TB**
+- Total: **~5.5TB**
+
+**Compute (ML Ranking):**
+- 4.3B queries/day × 500 products/query (BERT input) = 2.15T inferences/day
+- At 2ms per BERT inference = 4.3B GPU-seconds/day = 1.19M GPU-hours/day
+- This is way too expensive! Need optimization:
+  - Only rank top-500 (after retrieval): 4.3B × 500 = 2.15T → 4.3M GPU-hours/day
+  - Batch inference (64 queries): 4.3M / 64 = 67K GPU-hours/day
+  - With A100 at $2.16/hour = **$145K/day** (too expensive!)
+  - **Solution:** Use distilled model or cache embeddings
+  - Optimized cost: **$15K-20K/day**
+
+**Latency Budget (200ms p95):**
+- Query understanding: **20ms** (spell check, synonyms)
+- Retrieval (Elasticsearch): **50ms** (100M → 10K products)
+- Light ranking: **30ms** (10K → 500 products, simple scoring)
+- BERT ranking: **80ms** (500 → 20 products, batch inference)
+- Response assembly: **20ms** (JSON serialization, caching)
+- **Total: 200ms**
+
+**Quality Targets:**
+- NDCG@20: >0.85 (top-20 ranking quality)
+- MRR (Mean Reciprocal Rank): >0.70 (first relevant result position)
+- Conversion rate: >2% (2% of searches lead to purchase)
+- Zero-result rate: <5% (95% of queries return results)
+
+#### Key Challenges
+1. **Scale:** 50K QPS with 100M products requires efficient retrieval (can't rank all)
+2. **Latency:** 200ms with BERT is tight → need multi-stage funnel
+3. **Relevance vs Speed:** Trade-off between model complexity and latency
+4. **Cold Start:** New products have no engagement data, new users have no history
+5. **Query Understanding:** 15% typo rate, synonyms, intent ambiguity
+6. **Personalization:** Balance user preferences with diversity and discovery
+
+Does this capture everything?"
 
 #### Non-Functional Requirements
 - **Scale:** 50K QPS peak, 100M products
