@@ -74,29 +74,65 @@ This guide simulates a real Gen AI system design interview focused on multi-agen
 - **Safety:** Require approval for refunds >$100, escalate to human for complex cases
 - **Memory:** Track conversation context, user purchase history"
 
-### Requirements Summary
+### Requirements Summary & Calculations
 
-**You:** "Perfect! Let me summarize:
+**You:** "Perfect! Let me summarize with cost/complexity analysis:
 
 #### Functional Requirements
-- 5 specialized agents with domain expertise
-- Tool calling (databases, APIs, calculations)
-- Multi-turn conversation with context
-- Agent coordination (handoffs, collaboration)
-- Human escalation for complex cases
-- Approval workflow for high-value actions
+- 5 specialized agents: Order, Billing, Technical, Returns, Product Info
+- Agent orchestrator: Routes queries to appropriate agent
+- Tool calling: Database queries, payment API, shipping API, product catalog
+- Multi-turn conversations (avg 5 messages, maintain context)
+- Agent collaboration: Handoffs between agents (e.g., Order → Billing)
+- Human escalation: Complex cases, sentiment detection
+- Approval workflow: Refunds >$100 require approval
+- Memory: Conversation history + user purchase context
 
-#### Non-Functional Requirements
-- **Scale:** 10K concurrent, 100K conversations/day
-- **Latency:** <10s per response
-- **Safety:** Guardrails, approval workflows, audit logs
-- **Reliability:** 99.9% uptime, graceful degradation
-- **Cost:** Optimize LLM calls
+#### Non-Functional Requirements & Calculations
+
+**Scale:**
+- 100K conversations/day × 5 messages/conv = **500K messages/day**
+- 10K concurrent conversations (peak)
+- Agent breakdown: 40% simple (1 agent), 40% medium (2 agents), 20% complex (3+ agents)
+- Average agents per conversation: 1.8 agents
+
+**LLM Calls:**
+- 500K messages × 1.8 agents = **900K LLM calls/day = 27M/month**
+- Per call: 1K tokens input (context) + 200 tokens output
+- Total: 27M × 1.2K tokens = **32.4B tokens/month**
+
+**Cost:**
+- GPT-4: 32.4B × $0.03/1M = **$972/month** (input) + $324 (output) = $1,296/month
+- Claude 3.5: 32.4B × $0.003/1M = **$97/month** (input) + $49 (output) = $146/month
+- **Claude is 9× cheaper!**
+
+**Latency Budget (10s per response):**
+- Query classification: **500ms** (which agent to use?)
+- Context retrieval: **1s** (user history, past conversation)
+- Tool calls (if needed): **2-3s** (database/API calls)
+- LLM generation: **4-5s** (agent response)
+- Response post-processing: **500ms** (format, safety check)
+- **Total: 8.5-10s**
+
+**Storage:**
+- Conversation history: 100K conv/day × 5 messages × 500 bytes = **250MB/day**
+- User context: 10M users × 2KB = **20GB**
+- Agent models: 5 agents × 100MB configs = **500MB**
+
+**Success Metrics:**
+- Resolution rate: >80% (resolved without human)
+- User satisfaction: >4.2/5 stars
+- Average resolution time: <3 minutes
+- Escalation rate: <15% to human agents
+- Cost per conversation: <$0.05
 
 #### Key Challenges
-- **Orchestration:** Which agent handles what?
-- **Tool Reliability:** Handle API failures gracefully
-- **Context Management:** Maintain state across turns and agents
+- **Orchestration:** Route to correct agent(s), handle handoffs
+- **Tool Reliability:** APIs fail → graceful degradation, retries
+- **Context Management:** Track state across 5 messages × multiple agents
+- **Cost Optimization:** 27M LLM calls/month → caching, prompt compression
+- **Safety:** Prevent harmful actions, require approvals
+- **Scalability:** 10K concurrent conversations
 - **Safety:** Prevent harmful actions
 - **Observability:** Debug complex multi-agent flows
 

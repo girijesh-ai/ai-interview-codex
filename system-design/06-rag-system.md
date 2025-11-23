@@ -75,13 +75,73 @@ This guide simulates a real Gen AI system design interview focused on RAG system
 - **Privacy:** Moderate (internal use only, no sensitive PII)
 - **Languages:** English primary, Spanish secondary"
 
-### Requirements Summary
+### Requirements Summary & Calculations
 
-**You:** "Perfect! Let me summarize:
+**You:** "Perfect! Let me summarize with cost analysis:
 
 #### Functional Requirements
-- Ingest 100K documents from multiple sources (PDFs, wikis, Confluence, Docs)
-- Support conversational Q&A with multi-turn context
+- Ingest & index 100K documents (PDFs, wikis, Confluence, Google Docs)
+- Chunk documents into 500-1000 token segments
+- Generate embeddings for all chunks (vector search)
+- Hybrid search: BM25 (keyword) + Vector (semantic)
+- Re-rank retrieved chunks for relevance
+- LLM generation with cited sources
+- Support multi-turn conversations (maintain context)
+- Daily incremental updates (new/changed documents)
+
+#### Non-Functional Requirements & Calculations
+
+**Scale:**
+- 100K documents × 10 pages/doc × 500 tokens/page = **500M tokens total corpus**
+- Chunked: 500M tokens / 500 tokens/chunk = **1M chunks**
+- Queries: 1K/day = **30K/month**
+- Average query: 3 turns = **90K LLM calls/month**
+
+**Storage:**
+- Document text: 500M tokens × 4 chars/token × 1 byte = **2GB**
+- Embeddings: 1M chunks × 1536 dim × 4 bytes = **6GB** (OpenAI ada-002)
+- Vector DB index (HNSW): ~3× embeddings = **18GB**
+- Metadata: 1M chunks × 200 bytes = **200MB**
+- **Total: ~26GB**
+
+**Compute & Cost (GPT-4 + Claude):**
+
+**Embedding generation (one-time):**
+- 1M chunks × $0.13 per 1M tokens (ada-002)
+- 1M chunks × 500 tokens = 500M tokens
+- Cost: 500 × $0.13 = **$65 one-time**
+
+**LLM inference (monthly at 1K queries/day):**
+- Per query: 3K tokens context + 500 tokens output = 3.5K tokens
+- GPT-4: $30/1M input + $60/1M output
+  - 30K queries × 3K input = 90M input tokens = $2,700
+  - 30K queries × 500 output = 15M output tokens = $900
+  - **Total GPT-4: $3,600/month**
+
+- Claude 3.5 Sonnet: $3/1M input + $15/1M output
+  - 90M input = $270
+  - 15M output = $225
+  - **Total Claude: $495/month** (7× cheaper!)
+
+**Latency Budget (5 seconds):**
+- Query processing: **100ms** (parse, validate)
+- Embedding generation: **200ms** (query → vector)
+- Vector search: **300ms** (find top-20 chunks from 1M)
+- BM25 search: **200ms** (keyword matching)
+- Hybrid re-ranking: **300ms** (combine & sort)
+- LLM inference: **3-4 seconds** (generate answer)
+  - Input processing: 500ms
+  - Generation: 2.5-3.5s (streaming)
+- **Total: ~5 seconds**
+
+**Quality Metrics:**
+- Retrieval precision@5: >80% (top-5 chunks contain answer)
+- Answer accuracy: >90% (when relevant context retrieved)
+- Hallucination rate: <5% (with proper prompting)
+- Citation accuracy: 100% (every claim cited)
+- User satisfaction: >4/5 stars
+
+#### Key Challenges
 - Provide accurate answers with source citations
 - Daily document updates (incremental indexing)
 - Multi-language support (English, Spanish)
