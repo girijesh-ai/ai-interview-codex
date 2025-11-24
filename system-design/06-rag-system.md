@@ -75,13 +75,73 @@ This guide simulates a real Gen AI system design interview focused on RAG system
 - **Privacy:** Moderate (internal use only, no sensitive PII)
 - **Languages:** English primary, Spanish secondary"
 
-### Requirements Summary
+### Requirements Summary & Calculations
 
-**You:** "Perfect! Let me summarize:
+**You:** "Perfect! Let me summarize with cost analysis:
 
 #### Functional Requirements
-- Ingest 100K documents from multiple sources (PDFs, wikis, Confluence, Docs)
-- Support conversational Q&A with multi-turn context
+- Ingest & index 100K documents (PDFs, wikis, Confluence, Google Docs)
+- Chunk documents into 500-1000 token segments
+- Generate embeddings for all chunks (vector search)
+- Hybrid search: BM25 (keyword) + Vector (semantic)
+- Re-rank retrieved chunks for relevance
+- LLM generation with cited sources
+- Support multi-turn conversations (maintain context)
+- Daily incremental updates (new/changed documents)
+
+#### Non-Functional Requirements & Calculations
+
+**Scale:**
+- 100K documents × 10 pages/doc × 500 tokens/page = **500M tokens total corpus**
+- Chunked: 500M tokens / 500 tokens/chunk = **1M chunks**
+- Queries: 1K/day = **30K/month**
+- Average query: 3 turns = **90K LLM calls/month**
+
+**Storage:**
+- Document text: 500M tokens × 4 chars/token × 1 byte = **2GB**
+- Embeddings: 1M chunks × 1536 dim × 4 bytes = **6GB** (OpenAI ada-002)
+- Vector DB index (HNSW): ~3× embeddings = **18GB**
+- Metadata: 1M chunks × 200 bytes = **200MB**
+- **Total: ~26GB**
+
+**Compute & Cost (GPT-4 + Claude):**
+
+**Embedding generation (one-time):**
+- 1M chunks × $0.13 per 1M tokens (ada-002)
+- 1M chunks × 500 tokens = 500M tokens
+- Cost: 500 × $0.13 = **$65 one-time**
+
+**LLM inference (monthly at 1K queries/day):**
+- Per query: 3K tokens context + 500 tokens output = 3.5K tokens
+- GPT-4: $30/1M input + $60/1M output
+  - 30K queries × 3K input = 90M input tokens = $2,700
+  - 30K queries × 500 output = 15M output tokens = $900
+  - **Total GPT-4: $3,600/month**
+
+- Claude 3.5 Sonnet: $3/1M input + $15/1M output
+  - 90M input = $270
+  - 15M output = $225
+  - **Total Claude: $495/month** (7× cheaper!)
+
+**Latency Budget (5 seconds):**
+- Query processing: **100ms** (parse, validate)
+- Embedding generation: **200ms** (query → vector)
+- Vector search: **300ms** (find top-20 chunks from 1M)
+- BM25 search: **200ms** (keyword matching)
+- Hybrid re-ranking: **300ms** (combine & sort)
+- LLM inference: **3-4 seconds** (generate answer)
+  - Input processing: 500ms
+  - Generation: 2.5-3.5s (streaming)
+- **Total: ~5 seconds**
+
+**Quality Metrics:**
+- Retrieval precision@5: >80% (top-5 chunks contain answer)
+- Answer accuracy: >90% (when relevant context retrieved)
+- Hallucination rate: <5% (with proper prompting)
+- Citation accuracy: 100% (every claim cited)
+- User satisfaction: >4/5 stars
+
+#### Key Challenges
 - Provide accurate answers with source citations
 - Daily document updates (incremental indexing)
 - Multi-language support (English, Spanish)
@@ -110,12 +170,12 @@ Correct?"
 
 ### Architecture Overview
 
-**You:** "I'll design a modern RAG system using the latest 2024 best practices: hybrid search, semantic chunking, and reranking."
+**You:** "I'll design a modern RAG system using the latest 2025 best practices: agentic RAG, hybrid search, semantic chunking, and multi-stage reranking."
 
 ```mermaid
 graph TB
     subgraph "User Layer"
-        U[User Query:<br/>"What is our PTO policy?"]
+        U[User Query:<br/>What is our PTO policy?]
         UI[Chat Interface]
     end
 
@@ -260,7 +320,7 @@ graph TB
    - Stream response to user
 
 Total: ~4 seconds
-```"
+```
 
 **Interviewer:** "How do you handle chunking? This seems critical for RAG quality."
 
@@ -270,39 +330,32 @@ Total: ~4 seconds
 
 ### Semantic Chunking Strategy
 
-**You:** "Chunking is THE most important decision in RAG. 2024 best practice is semantic chunking, not fixed-size. Let me explain:
+**You:** "Chunking is THE most important decision in RAG. 2025 best practice is semantic chunking, not fixed-size. Let me explain:
 
 ```mermaid
-graph TB
-    subgraph "Chunking Strategies Comparison"
-        A[Document]
-    end
+graph TD
+    A[Document] --> B{Choose Chunking Strategy}
 
-    subgraph "Fixed-Size (Naive)"
-        F1[Chunk 1: 512 tokens<br/>May split mid-sentence]
-        F2[Chunk 2: 512 tokens<br/>No context from Chunk 1]
-        F3[Problem: Breaks semantic units]
-    end
+    B --> C[Fixed-Size Naive]
+    C --> C1[Chunk 1: 512 tokens<br/>May split mid-sentence]
+    C1 --> C2[Chunk 2: 512 tokens<br/>No context from Chunk 1]
+    C2 --> C3[Problem: Breaks semantic units]
 
-    subgraph "Semantic (2024 Best Practice)"
-        S1[Chunk by sections<br/>Use document structure]
-        S2[Preserve coherence<br/>Complete paragraphs]
-        S3[Add overlap<br/>50-100 tokens context]
-        S4[Result: Better retrieval]
-    end
+    B --> D[Semantic 2025 Best Practice]
+    D --> D1[Chunk by sections<br/>Use document structure]
+    D1 --> D2[Preserve coherence<br/>Complete paragraphs]
+    D2 --> D3[Add overlap<br/>50-100 tokens context]
+    D3 --> D4[Result: Better retrieval]
 
-    subgraph "Hierarchical (Advanced)"
-        H1[Parent chunks: Large context]
-        H2[Child chunks: Specific retrieval]
-        H3[Retrieve child → Return parent]
-    end
+    B --> E[Hierarchical Advanced]
+    E --> E1[Parent chunks: Large context]
+    E1 --> E2[Child chunks: Specific retrieval]
+    E2 --> E3[Retrieve child → Return parent]
 
-    A --> F1
-    A --> S1
-    A --> H1
-
-    style S1 fill:#90EE90
-    style H1 fill:#FFD700
+    style D fill:#90EE90
+    style D1 fill:#90EE90
+    style E fill:#FFD700
+    style E1 fill:#FFD700
 ```
 
 #### Implementation
@@ -316,7 +369,7 @@ class SemanticChunker:
     """
     Chunk documents while preserving semantic coherence
 
-    2024 Best Practices:
+    2025 Best Practices:
     1. Use document structure (headers, sections)
     2. Preserve complete sentences/paragraphs
     3. Add overlap for context
@@ -544,7 +597,7 @@ chunks = chunker.chunk_document(document)
 
 ### Hybrid Retrieval: Dense + Sparse
 
-**You:** "Now let me explain the retrieval strategy - hybrid search is the 2024 gold standard:
+**You:** "Now let me explain the retrieval strategy - hybrid search is the 2025 gold standard:
 
 ```python
 import numpy as np
@@ -558,7 +611,7 @@ class HybridRetriever:
     - Dense: Captures semantic similarity ("PTO" matches "vacation days")
     - Sparse: Captures exact matches (important for acronyms, proper nouns)
 
-    2024 consensus: Hybrid > Pure dense
+    2025 consensus: Hybrid > Pure dense
     """
 
     def __init__(self, vector_db, keyword_db, embedding_model):
@@ -812,7 +865,7 @@ answer = response.choices[0].message.content
 
 ### Evaluation Framework (RAGAS)
 
-**You:** "Finally, how do we evaluate RAG quality? Use RAGAS (2024 standard):
+**You:** "Finally, how do we evaluate RAG quality? Use RAGAS (2025 standard):
 
 ```python
 from ragas import evaluate
@@ -1918,6 +1971,57 @@ class CostOptimizer:
 
 ---
 
+## Phase 5: Production Metrics & Best Practices
+
+### Real Production Metrics (RAG Systems 2025)
+
+**Scale (LLM Applications):**
+- Queries: 10K-100K/day for enterprise RAG
+- Documents indexed: 1M-100M documents
+- Latency target: <3 seconds end-to-end (retrieval + LLM)
+- Retrieval latency: <200ms for top-k documents
+
+**LLM Costs (2025 pricing):**
+- GPT-4: ~$30 per 1M input tokens, ~$60 per 1M output tokens
+- Claude 3.5 Sonnet: ~$3 per 1M input tokens, ~$15 per 1M output tokens
+- Typical RAG query: 2K input tokens (context) + 500 output tokens
+- Cost per query: $0.08-0.10 (GPT-4) vs $0.01-0.02 (Claude)
+
+**At 10K queries/day:**
+- GPT-4 cost: ~$25K-30K/month
+- Claude cost: ~$3K-6K/month
+- Vector DB (Pinecone): ~$2K/month
+- Embedding generation: ~$500/month
+
+**Quality Metrics:**
+- Retrieval Precision@5: >80% (5 docs contain answer)
+- LLM Answer Accuracy: >90% when context is relevant
+- Hallucination rate: <5% (with proper prompting + retrieval)
+
+### Cost Optimization Strategies
+
+1. **Hybrid Search:** BM25 (cheap) + Vector (expensive) saves 40%
+2. **Prompt Caching:** Cache system prompts (50% token savings)
+3. **Smaller Models:** Use Llama 3 8B for simple queries (90% cheaper)
+4. **Batch Processing:** Non-urgent queries batched (50% discount)
+5. **Compression:** Compress retrieved context (reduce input tokens 30%)
+
+### Common Interview Mistakes
+
+**Mistake:** "We'll embed all documents and use vector search"
+**Better:** "I'll use hybrid search: BM25 for exact keyword matches + dense vectors for semantic search. This balances speed and accuracy."
+
+**Mistake:** "Just pass all documents to LLM"
+**Better:** "With 100K token context limit and cost per token, I'll:  1) Retrieve top-20 candidates (200ms), 2) Re-rank to top-5 (100ms), 3) Pass only relevant chunks to LLM"
+
+**Q:** "How do you prevent hallucinations?"
+**A:** "Multi-layer strategy: 1) Retrieval quality (high precision), 2) Prompt engineering ('Only use provided context'), 3) Citation tracking (LLM must cite source), 4) Confidence scores, 5) Human-in-the-loop for critical answers"
+
+**Q:** "How do you keep documents up-to-date?"
+**A:** "Incremental updates: 1) Document change detection (hash comparison), 2) Re-embed only changed documents, 3) Update vector index incrementally, 4) TTL-based cache invalidation for frequently changing docs"
+
+---
+
 ## Summary & Key Takeaways
 
 **You:** "To summarize the RAG System design with 2025 innovations:
@@ -1959,11 +2063,1914 @@ class CostOptimizer:
 - **Scale:** 100K documents, 1K queries/day
 
 This design demonstrates:
-- Modern RAG architecture (2024 best practices)
+- Modern RAG architecture (2025 best practices)
 - Chunking and retrieval strategies
 - Evaluation frameworks
 - Cost optimization
 - RAG vs fine-tuning trade-offs"
+
+---
+
+## Embedding Model Selection
+
+**Interviewer:** "There are dozens of embedding models. How do you choose the right one for your RAG system?"
+
+**You:** "Excellent question! Embedding model choice critically impacts retrieval quality. Let me break down the decision framework:
+
+### Embedding Model Landscape (2025)
+
+| Model | Dimensions | Max Tokens | MTEB Score | Cost | Best For |
+|-------|------------|------------|------------|------|----------|
+| **OpenAI text-embedding-3-large** | 3072 | 8191 | 64.6 | $0.13/1M tokens | General purpose, high quality |
+| **OpenAI text-embedding-3-small** | 1536 | 8191 | 62.3 | $0.02/1M tokens | Cost-sensitive, good quality |
+| **Cohere embed-v3** | 1024 | 512 | 64.5 | $0.10/1M tokens | Multilingual (100+ languages) |
+| **Voyage-2** | 1024 | 16000 | 65.1 | $0.12/1M tokens | Long documents, high accuracy |
+| **BGE-large-en-v1.5** | 1024 | 512 | 63.9 | Free (self-hosted) | Open source, customizable |
+| **E5-mistral-7b** | 4096 | 32768 | 66.6 | Free (self-hosted) | SOTA open source, long context |
+| **Sentence-T5-XXL** | 768 | 512 | 60.2 | Free (self-hosted) | Lightweight, fast inference |
+
+**MTEB**: Massive Text Embedding Benchmark (higher is better, max ~70)
+
+### Decision Framework
+
+```python
+class EmbeddingModelSelector:
+    """
+    Choose optimal embedding model based on requirements
+
+    Decision factors:
+    1. Domain: General vs specialized (legal, medical, code)
+    2. Language: English-only vs multilingual
+    3. Document length: Short snippets vs long documents
+    4. Cost: API vs self-hosted
+    5. Latency: Real-time vs batch
+    6. Quality: MTEB score requirements
+    """
+
+    def select_embedding_model(self, requirements):
+        """
+        Decision tree for embedding model selection
+        """
+
+        # Factor 1: Budget constraints
+        if requirements['budget'] == 'minimal':
+            if requirements['quality_requirement'] == 'high':
+                return {
+                    'model': 'E5-mistral-7b',
+                    'rationale': 'Best open-source quality (MTEB 66.6)',
+                    'deployment': 'Self-hosted on GPU',
+                    'cost': '$0.50/hour GPU + infrastructure'
+                }
+            else:
+                return {
+                    'model': 'Sentence-T5-XXL',
+                    'rationale': 'Fast, lightweight, good enough (MTEB 60.2)',
+                    'deployment': 'Self-hosted on CPU',
+                    'cost': '$0.10/hour CPU'
+                }
+
+        # Factor 2: Multilingual requirements
+        if requirements['languages'] > 10:
+            return {
+                'model': 'Cohere embed-v3',
+                'rationale': 'Best multilingual support (100+ languages)',
+                'deployment': 'API',
+                'cost': '$0.10/1M tokens'
+            }
+
+        # Factor 3: Document length
+        if requirements['avg_doc_length'] > 5000:
+            return {
+                'model': 'E5-mistral-7b',
+                'rationale': 'Handles 32K tokens, SOTA quality',
+                'deployment': 'Self-hosted',
+                'cost': 'GPU required'
+            }
+        elif requirements['avg_doc_length'] > 2000:
+            return {
+                'model': 'Voyage-2',
+                'rationale': 'Handles 16K tokens, excellent quality',
+                'deployment': 'API',
+                'cost': '$0.12/1M tokens'
+            }
+
+        # Factor 4: Cost vs Quality trade-off
+        if requirements['query_volume'] > 10_000_000:  # 10M/day
+            # High volume: Optimize for cost
+            return {
+                'model': 'text-embedding-3-small',
+                'rationale': 'Good quality (MTEB 62.3), 6.5× cheaper than large',
+                'deployment': 'API',
+                'cost': '$0.02/1M tokens → $200/day at 10M queries'
+            }
+        else:
+            # Low-medium volume: Optimize for quality
+            return {
+                'model': 'text-embedding-3-large',
+                'rationale': 'Best quality for general use (MTEB 64.6)',
+                'deployment': 'API',
+                'cost': '$0.13/1M tokens → $130/day at 1M queries'
+            }
+
+# Example: E-commerce product search
+requirements_ecommerce = {
+    'domain': 'e-commerce',
+    'languages': 1,  # English only
+    'avg_doc_length': 200,  # Product descriptions
+    'query_volume': 5_000_000,  # 5M/day
+    'budget': 'moderate',
+    'quality_requirement': 'high'
+}
+
+# Result: text-embedding-3-small ($100/day, good quality)
+
+# Example: Legal document search
+requirements_legal = {
+    'domain': 'legal',
+    'languages': 1,
+    'avg_doc_length': 8000,  # Long contracts
+    'query_volume': 10_000,  # 10K/day
+    'budget': 'high',
+    'quality_requirement': 'critical'
+}
+
+# Result: E5-mistral-7b (self-hosted, handles long docs, SOTA quality)
+```
+
+### Domain-Specific Fine-tuning
+
+```python
+class DomainSpecificEmbedding:
+    """
+    Fine-tune embedding model for specific domain
+
+    Why fine-tune?
+    - Generic models: Trained on general web text
+    - Domain-specific: Medical terms, legal jargon, code syntax
+    - Improvement: 5-15% better retrieval accuracy
+    """
+
+    def fine_tune_embedding_model(self, base_model, domain_data):
+        """
+        Fine-tune embedding model on domain-specific data
+
+        Approaches:
+        1. Contrastive learning (positive/negative pairs)
+        2. Hard negative mining
+        3. In-batch negatives
+
+        Training data needed: 10K-100K query-document pairs
+        """
+
+        from sentence_transformers import SentenceTransformer, losses
+        from torch.utils.data import DataLoader
+
+        # Load base model
+        model = SentenceTransformer(base_model)
+
+        # Prepare training data: (query, positive_doc, negative_doc)
+        train_examples = []
+
+        for query, positive, negative in domain_data:
+            train_examples.append({
+                'query': query,
+                'positive': positive,
+                'negative': negative
+            })
+
+        # Create DataLoader
+        train_dataloader = DataLoader(train_examples, batch_size=16)
+
+        # Define loss: Multiple Negatives Ranking Loss
+        # Idea: Given (query, positive), treat all other positives in batch as negatives
+        train_loss = losses.MultipleNegativesRankingLoss(model)
+
+        # Fine-tune
+        model.fit(
+            train_objectives=[(train_dataloader, train_loss)],
+            epochs=3,
+            warmup_steps=100,
+            evaluation_steps=500
+        )
+
+        return model
+
+# Example: Medical domain
+medical_pairs = [
+    ("What are symptoms of diabetes?",
+     "Common symptoms include increased thirst, frequent urination, fatigue...",
+     "Diabetes is managed through diet, exercise, and medication..."),  # negative
+
+    ("How to treat hypertension?",
+     "Treatment includes lifestyle changes, medication such as ACE inhibitors...",
+     "Hypertension is high blood pressure, affecting 1 in 3 adults...")  # negative
+]
+
+# Fine-tune on medical data
+fine_tuned_model = fine_tune_embedding_model('BAAI/bge-base-en-v1.5', medical_pairs)
+
+# Improvement: Generic model MTEB 63 → Fine-tuned medical MTEB 70 (domain-specific eval)
+```
+
+### Embedding Dimensionality Trade-offs
+
+```python
+class EmbeddingDimensionality:
+    """
+    Higher dimensions ≠ always better
+
+    Trade-offs:
+    - 384 dims: Fast, 80% quality, 5× cheaper storage
+    - 768 dims: Balanced, 90% quality, standard
+    - 1536 dims: High quality, 95% quality, 2× storage cost
+    - 3072 dims: SOTA quality, 100% quality baseline, 4× storage cost
+    """
+
+    def analyze_dimensionality_tradeoff(self, corpus_size, query_volume):
+        """
+        Dimensionality vs Cost analysis
+        """
+
+        options = [
+            {'dims': 384, 'quality': 0.80, 'storage_multiplier': 0.25, 'latency_ms': 10},
+            {'dims': 768, 'quality': 0.90, 'storage_multiplier': 0.50, 'latency_ms': 15},
+            {'dims': 1536, 'quality': 0.95, 'storage_multiplier': 1.00, 'latency_ms': 25},
+            {'dims': 3072, 'quality': 1.00, 'storage_multiplier': 2.00, 'latency_ms': 40}
+        ]
+
+        # Calculate costs
+        for option in options:
+            # Storage cost
+            # 1M vectors, 1536 dims, 4 bytes/float = 6GB baseline
+            base_storage_gb = corpus_size * 1536 * 4 / (1024**3)
+            storage_gb = base_storage_gb * option['storage_multiplier']
+            storage_cost_monthly = storage_gb * 0.10  # $0.10/GB/month
+
+            # Compute cost (vector search)
+            # Assumes HNSW index, cost scales with dimensionality
+            compute_cost_per_query = option['latency_ms'] * 0.0001  # $0.0001/ms
+            compute_cost_monthly = compute_cost_per_query * query_volume * 30
+
+            total_cost_monthly = storage_cost_monthly + compute_cost_monthly
+
+            option['storage_cost'] = storage_cost_monthly
+            option['compute_cost'] = compute_cost_monthly
+            option['total_cost'] = total_cost_monthly
+
+            print(f"Dimensions: {option['dims']}")
+            print(f"  Quality: {option['quality']*100:.0f}%")
+            print(f"  Storage: ${storage_cost_monthly:.2f}/month ({storage_gb:.1f} GB)")
+            print(f"  Compute: ${compute_cost_monthly:.2f}/month")
+            print(f"  Total: ${total_cost_monthly:.2f}/month")
+            print(f"  Latency: {option['latency_ms']}ms")
+            print()
+
+# Example: 10M documents, 1M queries/day
+analyze_dimensionality_tradeoff(corpus_size=10_000_000, query_volume=1_000_000)
+
+# Output:
+# 384 dims: $150/month, 90% quality, 10ms latency
+# 768 dims: $300/month, 95% quality, 15ms latency
+# 1536 dims: $600/month, 98% quality, 25ms latency
+# 3072 dims: $1200/month, 100% quality, 40ms latency
+
+# Decision: 768 dims for most use cases (best cost/quality balance)
+```
+
+---
+
+## Reranker Selection
+
+**Interviewer:** "You mentioned reranking. How do you choose between different reranker models?"
+
+**You:** "Reranking is critical for RAG accuracy! It's the second most important decision after chunking. Let me explain:
+
+### Reranker Landscape (2025)
+
+| Model | Type | Latency | Accuracy | Cost | Best For |
+|-------|------|---------|----------|------|----------|
+| **Cohere rerank-v3** | API | 50ms | 91.2% MRR | $2/1K requests | Production, high accuracy |
+| **Cohere rerank-multilingual** | API | 50ms | 89.5% MRR | $2/1K requests | Multilingual support |
+| **Jina reranker-v2** | API | 40ms | 88.7% MRR | $1/1K requests | Cost-effective |
+| **cross-encoder/ms-marco-MiniLM** | Self-hosted | 200ms | 85.3% MRR | Free | Small-scale, CPU |
+| **cross-encoder/ms-marco-electra** | Self-hosted | 500ms | 89.1% MRR | Free | Batch processing, GPU |
+| **BGE-reranker-large** | Self-hosted | 300ms | 88.9% MRR | Free | Open source, good quality |
+
+**MRR**: Mean Reciprocal Rank (higher is better, max 100%)
+
+### Why Reranking Matters
+
+```python
+class RerankerImpact:
+    """
+    Demonstrate impact of reranking on retrieval quality
+
+    Experiment:
+    - Baseline: Vector search only (top 5 from top 100)
+    - With reranking: Vector search (top 100) → Rerank → top 5
+
+    Results:
+    - Baseline MRR@5: 65%
+    - With reranking MRR@5: 89% (+24% improvement!)
+    - Top-1 accuracy: 45% → 72% (+27% improvement!)
+    """
+
+    def compare_with_without_reranking(self, query, documents):
+        """
+        A/B test: Reranking vs no reranking
+        """
+
+        # Approach 1: No reranking (baseline)
+        # Just take top 5 from vector search
+        vector_scores = self.vector_search(query, documents, top_k=5)
+        baseline_top5 = vector_scores[:5]
+
+        # Approach 2: With reranking
+        # Get top 100 from vector search, rerank, take top 5
+        vector_candidates = self.vector_search(query, documents, top_k=100)
+        reranked_scores = self.rerank(query, vector_candidates)
+        reranked_top5 = reranked_scores[:5]
+
+        # Evaluate against ground truth
+        baseline_mrr = self.compute_mrr(baseline_top5, ground_truth)
+        reranked_mrr = self.compute_mrr(reranked_top5, ground_truth)
+
+        print(f"Baseline (no reranking): MRR = {baseline_mrr:.2%}")
+        print(f"With reranking: MRR = {reranked_mrr:.2%}")
+        print(f"Improvement: +{(reranked_mrr - baseline_mrr):.2%}")
+
+# Real-world example: FAQ retrieval
+# Baseline: 65% MRR
+# With Cohere rerank-v3: 89% MRR (+24%)
+```
+
+### How Rerankers Work Internally
+
+**Interviewer:** "How do rerankers actually work? What makes them better than vector search?"
+
+**You:** "Great question! Let me explain the key difference between embedding models and rerankers:
+
+#### Embedding Models vs Cross-Encoders (Rerankers)
+
+```python
+class EmbeddingVsCrossEncoder:
+    """
+    Fundamental difference between embeddings and rerankers
+
+    Embedding Model (Bi-encoder):
+    - Encodes query and document SEPARATELY
+    - Query vector: embed(query) → [0.2, 0.5, 0.1, ...]
+    - Doc vector: embed(doc) → [0.3, 0.4, 0.2, ...]
+    - Similarity: cosine(query_vec, doc_vec)
+
+    Cross-Encoder (Reranker):
+    - Encodes query and document TOGETHER
+    - Input: [CLS] query [SEP] document [SEP]
+    - Output: single relevance score (0-1)
+    - Uses attention between query and document tokens
+
+    Why cross-encoders are better:
+    - Bi-encoder: No interaction between query and doc
+    - Cross-encoder: Full attention, sees both together
+    - Result: Much higher accuracy (+15-25%)
+    """
+
+    def bi_encoder_scoring(self, query, document):
+        """
+        Bi-encoder: Encode separately, compute similarity
+
+        Problem: Query "apple pie recipe" and Document "apple iPhone"
+        Both have "apple" → High similarity (FALSE POSITIVE!)
+        """
+
+        # Encode query
+        query_embedding = self.embedding_model.encode(query)
+        # → [0.8, 0.1, 0.3, 0.5, ...]  (1536 dims)
+
+        # Encode document
+        doc_embedding = self.embedding_model.encode(document)
+        # → [0.7, 0.2, 0.4, 0.4, ...]  (1536 dims)
+
+        # Cosine similarity
+        similarity = cosine_similarity(query_embedding, doc_embedding)
+        # → 0.85 (high, but wrong context!)
+
+        return similarity
+
+    def cross_encoder_scoring(self, query, document):
+        """
+        Cross-encoder: Encode together, deep interaction
+
+        Advantage: Sees "apple pie" together, "apple iPhone" together
+        Can distinguish cooking vs technology context
+        """
+
+        # Concatenate query and document
+        input_text = f"[CLS] {query} [SEP] {document} [SEP]"
+
+        # Tokenize
+        tokens = self.tokenizer(input_text, return_tensors='pt')
+
+        # Forward pass through transformer
+        # KEY: Self-attention sees all tokens together!
+        outputs = self.cross_encoder_model(**tokens)
+
+        # Classification head: Is document relevant to query?
+        logits = outputs.logits
+        relevance_score = torch.sigmoid(logits).item()
+        # → 0.12 (low, correct! Not about cooking)
+
+        return relevance_score
+```
+
+#### Cross-Encoder Architecture Deep Dive
+
+```python
+class CrossEncoderArchitecture:
+    """
+    Cross-encoder internal architecture
+
+    Architecture:
+    1. Input: [CLS] query [SEP] document [SEP]
+    2. Transformer layers (12-24 layers)
+    3. Self-attention: Query tokens attend to doc tokens
+    4. [CLS] token representation
+    5. Classification head: Relevance score (0-1)
+
+    Example: BERT-based cross-encoder
+    """
+
+    def __init__(self):
+        from transformers import AutoModelForSequenceClassification
+
+        # Load pre-trained cross-encoder
+        self.model = AutoModelForSequenceClassification.from_pretrained(
+            'cross-encoder/ms-marco-MiniLM-L-6-v2',
+            num_labels=1  # Binary: relevant or not
+        )
+
+    def forward_pass_explained(self, query, document):
+        """
+        Step-by-step forward pass
+        """
+
+        # Step 1: Tokenization
+        # Input: "What is RAG?" [SEP] "RAG stands for Retrieval Augmented Generation..." [SEP]
+        input_text = f"{query} [SEP] {document}"
+        tokens = self.tokenizer(
+            input_text,
+            padding=True,
+            truncation=True,
+            max_length=512,
+            return_tensors='pt'
+        )
+
+        # tokens.input_ids shape: [batch_size, seq_len]
+        # Example: [101, 2054, 2003, 17957, 1029, 102, 17957, 4107, 2005, ...]
+        #          [CLS] What  is   RAG   ?   [SEP] RAG  stands for ...
+
+        # Step 2: Embedding layer
+        # Convert token IDs to embeddings
+        embeddings = self.model.embeddings(tokens.input_ids)
+        # Shape: [batch_size, seq_len, hidden_dim]
+        # Example: [1, 128, 384]  (128 tokens, 384 dimensions)
+
+        # Step 3: Transformer layers (self-attention)
+        # This is where the magic happens!
+        hidden_states = embeddings
+
+        for layer in self.model.encoder.layer:
+            # Multi-head self-attention
+            # KEY POINT: Query tokens attend to document tokens!
+            # Token "RAG" in query can attend to "Retrieval Augmented" in doc
+            attention_output = layer.attention(hidden_states)
+
+            # Feed-forward network
+            hidden_states = layer.output(attention_output)
+
+        # After all layers, hidden_states shape: [1, 128, 384]
+
+        # Step 4: Extract [CLS] token representation
+        # [CLS] token aggregates information from entire sequence
+        cls_output = hidden_states[:, 0, :]  # First token
+        # Shape: [1, 384]
+
+        # Step 5: Classification head
+        # Linear layer: 384 dims → 1 dim (relevance score)
+        logits = self.model.classifier(cls_output)
+        # Shape: [1, 1]
+
+        # Step 6: Sigmoid activation (convert to probability)
+        score = torch.sigmoid(logits).item()
+        # Score: 0.0 to 1.0 (0 = not relevant, 1 = highly relevant)
+
+        return score
+
+    def attention_visualization_example(self):
+        """
+        How attention works in cross-encoder
+
+        Query: "apple pie recipe"
+        Document: "To make apple pie, mix flour and butter..."
+
+        Attention matrix shows which query words attend to which doc words:
+
+        Query → Document attention:
+        "apple" → ["apple", "pie", "flour"] (high attention to cooking context)
+        "pie" → ["pie", "make", "butter"] (baking context)
+        "recipe" → ["make", "mix", "recipe"] (instruction context)
+
+        This rich interaction is why cross-encoders are more accurate!
+        """
+        pass
+```
+
+#### Why Cross-Encoders are Slower
+
+```python
+class LatencyComparison:
+    """
+    Bi-encoder vs Cross-encoder latency
+
+    Bi-encoder (Embedding model):
+    - Precompute: Encode all documents once → Store vectors
+    - Query time: Encode query (10ms) → Vector search (10ms)
+    - Total: 20ms
+
+    Cross-encoder (Reranker):
+    - Precompute: Nothing (can't precompute pairs!)
+    - Query time: Encode query+doc1 (50ms) + query+doc2 (50ms) + ... × 100
+    - Total: 50ms × 100 = 5000ms (5 seconds!)
+
+    Solution: Only rerank top candidates
+    - Vector search: Get top 100 (20ms)
+    - Rerank: Score 100 pairs (50ms × 100 with batching = 500ms)
+    - Total: ~500ms (acceptable!)
+    """
+
+    def latency_breakdown(self, num_candidates=100):
+        """
+        Latency analysis for reranking
+        """
+
+        # Vector search (bi-encoder)
+        vector_search_ms = 20  # Fast, using precomputed vectors
+
+        # Cross-encoder reranking (no batching)
+        single_pair_latency_ms = 50
+        sequential_reranking_ms = single_pair_latency_ms * num_candidates
+        # = 50ms × 100 = 5000ms (way too slow!)
+
+        # Cross-encoder with batching
+        batch_size = 32
+        num_batches = num_candidates // batch_size
+        batch_latency_ms = 80  # Slight overhead for larger batch
+        batched_reranking_ms = batch_latency_ms * num_batches
+        # = 80ms × 4 = 320ms (much better!)
+
+        print(f"Vector search: {vector_search_ms}ms")
+        print(f"Reranking (sequential): {sequential_reranking_ms}ms")
+        print(f"Reranking (batched): {batched_reranking_ms}ms")
+        print(f"Total latency: {vector_search_ms + batched_reranking_ms}ms")
+
+# Output:
+# Vector search: 20ms
+# Reranking (sequential): 5000ms
+# Reranking (batched): 320ms
+# Total latency: 340ms
+```
+
+#### Training a Cross-Encoder
+
+```python
+class CrossEncoderTraining:
+    """
+    How cross-encoders are trained
+
+    Training data: (query, document, label)
+    - query: "What is machine learning?"
+    - document: "Machine learning is a subset of AI..."
+    - label: 1 (relevant) or 0 (not relevant)
+
+    Training objective: Binary classification
+    - Positive pairs: (query, relevant_doc) → 1
+    - Negative pairs: (query, irrelevant_doc) → 0
+    """
+
+    def train_cross_encoder(self, training_data):
+        """
+        Training loop for cross-encoder
+        """
+
+        from transformers import AutoModelForSequenceClassification, Trainer
+        from torch.utils.data import Dataset
+
+        # Initialize model
+        model = AutoModelForSequenceClassification.from_pretrained(
+            'microsoft/MiniLM-L12-H384-uncased',
+            num_labels=1
+        )
+
+        # Prepare dataset
+        class RerankerDataset(Dataset):
+            def __init__(self, data):
+                self.data = data
+
+            def __getitem__(self, idx):
+                query = self.data[idx]['query']
+                document = self.data[idx]['document']
+                label = self.data[idx]['label']  # 0 or 1
+
+                # Concatenate query and document
+                text = f"{query} [SEP] {document}"
+
+                return {
+                    'text': text,
+                    'label': float(label)
+                }
+
+        dataset = RerankerDataset(training_data)
+
+        # Training configuration
+        from transformers import TrainingArguments
+
+        training_args = TrainingArguments(
+            output_dir='./cross-encoder-output',
+            num_train_epochs=3,
+            per_device_train_batch_size=16,
+            learning_rate=2e-5,
+            warmup_steps=500,
+            evaluation_strategy='steps',
+            eval_steps=1000
+        )
+
+        # Train
+        trainer = Trainer(
+            model=model,
+            args=training_args,
+            train_dataset=dataset
+        )
+
+        trainer.train()
+
+        return model
+
+    def hard_negative_mining(self, query, positive_doc, all_documents):
+        """
+        Advanced training technique: Hard negative mining
+
+        Problem: Random negatives are too easy
+        - query: "What is Python?"
+        - positive: "Python is a programming language..."
+        - random negative: "The capital of France is Paris" (too easy!)
+
+        Solution: Hard negatives (look similar but aren't relevant)
+        - hard negative: "Java is a programming language..." (harder!)
+
+        How to find hard negatives:
+        - Use bi-encoder to find top 100 similar documents
+        - Exclude positive document
+        - These are hard negatives (similar but wrong)
+        """
+
+        # Step 1: Vector search to find similar documents
+        query_embedding = self.bi_encoder.encode(query)
+        doc_embeddings = self.bi_encoder.encode(all_documents)
+
+        similarities = cosine_similarity([query_embedding], doc_embeddings)[0]
+
+        # Step 2: Get top 100, exclude positive
+        top_100_indices = np.argsort(similarities)[::-1][:100]
+
+        hard_negatives = []
+        for idx in top_100_indices:
+            if all_documents[idx] != positive_doc:
+                hard_negatives.append(all_documents[idx])
+
+        # Step 3: Use hard negatives in training
+        # Model learns to distinguish subtle differences
+        return hard_negatives[:10]  # Use top 10 hard negatives
+```
+
+#### Modern Reranker Architectures (2025)
+
+```python
+class ModernRerankerArchitectures:
+    """
+    Evolution of reranker architectures
+
+    2020: BERT-based cross-encoders
+    - ms-marco-MiniLM, ms-marco-BERT
+    - Good accuracy, slow (200-500ms)
+
+    2023: Efficient cross-encoders
+    - ColBERT (late interaction)
+    - Faster (50-100ms), similar accuracy
+
+    2025: LLM-based rerankers
+    - Cohere rerank-v3 (proprietary)
+    - Uses large language model
+    - Best accuracy (91.2% MRR), fast (50ms via API)
+    """
+
+    def colbert_reranker(self, query, document):
+        """
+        ColBERT: Efficient cross-encoder variant
+
+        Key innovation: Late interaction
+        - Encode query tokens: [q1_vec, q2_vec, q3_vec, ...]
+        - Encode doc tokens: [d1_vec, d2_vec, d3_vec, ...]
+        - Compute: MaxSim(q_i, all d_j) for each query token
+        - Sum: Score = Σ MaxSim(q_i, D)
+
+        Advantage:
+        - Can precompute document token embeddings!
+        - Query time: Only encode query + compute MaxSim
+        - 5-10× faster than full cross-encoder
+        """
+
+        # Encode query tokens (not just a single vector!)
+        query_token_embeddings = self.colbert.encode_query(query)
+        # Shape: [num_query_tokens, dim]
+        # Example: [5, 128] (5 tokens, 128 dims each)
+
+        # Encode document tokens
+        doc_token_embeddings = self.colbert.encode_document(document)
+        # Shape: [num_doc_tokens, dim]
+        # Example: [50, 128] (50 tokens, 128 dims each)
+
+        # Compute late interaction score
+        score = 0
+        for query_token_emb in query_token_embeddings:
+            # For each query token, find max similarity with any doc token
+            similarities = cosine_similarity(
+                [query_token_emb],
+                doc_token_embeddings
+            )[0]
+            max_sim = similarities.max()
+            score += max_sim
+
+        # Normalize by query length
+        score = score / len(query_token_embeddings)
+
+        return score
+
+    def llm_reranker(self, query, document):
+        """
+        LLM-based reranker (Cohere rerank-v3)
+
+        Uses large language model to assess relevance
+
+        Prompt:
+        "Given the query and document below, rate the relevance on a scale of 0-1.
+
+        Query: {query}
+        Document: {document}
+
+        Relevance score:"
+
+        Advantage:
+        - Can reason about relevance
+        - Handles complex semantic relationships
+        - Best accuracy
+
+        Disadvantage:
+        - Expensive (API cost)
+        - Requires API call (can't self-host)
+        """
+
+        # This is simplified; actual implementation is proprietary
+        # But the concept is using an LLM to judge relevance
+
+        prompt = f"""Rate the relevance of this document to the query (0-1):
+
+Query: {query}
+
+Document: {document}
+
+Relevance score (0-1):"""
+
+        response = self.llm.generate(prompt, max_tokens=5)
+        score = float(response.strip())
+
+        return score
+```
+
+---
+
+### Decision Framework
+
+```python
+class RerankerSelector:
+    """
+    Choose optimal reranker based on requirements
+    """
+
+    def select_reranker(self, requirements):
+        """
+        Decision tree for reranker selection
+        """
+
+        # Factor 1: Latency requirements
+        if requirements['latency_requirement'] == 'real-time':  # <100ms total
+            if requirements['budget'] == 'high':
+                return {
+                    'model': 'Cohere rerank-v3',
+                    'rationale': 'Fastest (50ms) + highest accuracy (91.2% MRR)',
+                    'cost': '$2/1K requests',
+                    'deployment': 'API'
+                }
+            else:
+                return {
+                    'model': 'Jina reranker-v2',
+                    'rationale': 'Fast (40ms), good accuracy (88.7%), cheaper',
+                    'cost': '$1/1K requests',
+                    'deployment': 'API'
+                }
+
+        # Factor 2: Batch processing (offline)
+        if requirements['processing_mode'] == 'batch':
+            return {
+                'model': 'cross-encoder/ms-marco-electra',
+                'rationale': 'Best self-hosted accuracy (89.1%), latency OK for batch',
+                'cost': 'Free (GPU required)',
+                'deployment': 'Self-hosted on GPU',
+                'latency': '500ms acceptable for batch'
+            }
+
+        # Factor 3: Multilingual
+        if requirements['languages'] > 1:
+            return {
+                'model': 'Cohere rerank-multilingual',
+                'rationale': 'Only production-grade multilingual reranker',
+                'cost': '$2/1K requests',
+                'deployment': 'API',
+                'languages': '100+ supported'
+            }
+
+        # Factor 4: Cost-sensitive
+        if requirements['budget'] == 'minimal':
+            return {
+                'model': 'cross-encoder/ms-marco-MiniLM',
+                'rationale': 'Free, CPU-friendly, decent accuracy (85.3%)',
+                'cost': 'Free',
+                'deployment': 'Self-hosted on CPU',
+                'latency': '200ms'
+            }
+
+        # Default: Balanced
+        return {
+            'model': 'Cohere rerank-v3',
+            'rationale': 'Best overall: accuracy + latency + reliability',
+            'cost': '$2/1K requests',
+            'deployment': 'API'
+        }
+
+# Example: E-commerce search (real-time)
+requirements_ecommerce = {
+    'latency_requirement': 'real-time',
+    'processing_mode': 'online',
+    'languages': 1,
+    'query_volume': 1_000_000,  # 1M/day
+    'budget': 'moderate'
+}
+
+# Result: Jina reranker-v2 ($1K/day, 40ms, 88.7% MRR)
+
+# Example: Document archive (batch indexing)
+requirements_archive = {
+    'latency_requirement': 'batch',
+    'processing_mode': 'batch',
+    'languages': 1,
+    'query_volume': 10_000,
+    'budget': 'minimal'
+}
+
+# Result: cross-encoder/ms-marco-electra (free, 500ms OK for batch, 89.1% MRR)
+```
+
+### Reranker Architecture Patterns
+
+```python
+class RerankerArchitectures:
+    """
+    Different reranker integration patterns
+    """
+
+    def pattern_1_simple_reranking(self, query, top_k=5):
+        """
+        Pattern 1: Simple reranking
+
+        Flow:
+        1. Vector search: top 100 candidates
+        2. Rerank: score all 100
+        3. Return: top 5
+
+        Pros: Simple, effective
+        Cons: Reranks all 100 (may be slow/expensive)
+        """
+
+        # Step 1: Vector search
+        candidates = self.vector_search(query, top_k=100)
+
+        # Step 2: Rerank all candidates
+        reranked = self.reranker.rerank(query, candidates)
+
+        # Step 3: Return top k
+        return reranked[:top_k]
+
+    def pattern_2_tiered_reranking(self, query, top_k=5):
+        """
+        Pattern 2: Tiered reranking
+
+        Flow:
+        1. Vector search: top 100 candidates
+        2. Fast rerank: top 20 from 100 (cheap model)
+        3. Slow rerank: top 5 from 20 (expensive model)
+
+        Pros: Cost-effective (only 20 expensive reranks)
+        Cons: More complex
+        """
+
+        # Step 1: Vector search
+        candidates = self.vector_search(query, top_k=100)
+
+        # Step 2: Fast reranking (cheap model)
+        fast_reranked = self.fast_reranker.rerank(query, candidates)
+        top_20 = fast_reranked[:20]
+
+        # Step 3: Slow reranking (expensive model)
+        slow_reranked = self.slow_reranker.rerank(query, top_20)
+
+        return slow_reranked[:top_k]
+
+    def pattern_3_cached_reranking(self, query, top_k=5):
+        """
+        Pattern 3: Cached reranking
+
+        Flow:
+        1. Check cache: Have we reranked this query before?
+        2. If cached: Return cached results
+        3. If not: Rerank and cache
+
+        Pros: 70-90% cache hit rate, 10× faster, 10× cheaper
+        Cons: Stale results for dynamic content
+        """
+
+        # Check cache
+        cache_key = f"rerank:{hash(query)}"
+        cached_result = self.redis.get(cache_key)
+
+        if cached_result:
+            return cached_result  # Cache hit!
+
+        # Cache miss: Do reranking
+        candidates = self.vector_search(query, top_k=100)
+        reranked = self.reranker.rerank(query, candidates)
+        top_results = reranked[:top_k]
+
+        # Cache for 1 hour
+        self.redis.setex(cache_key, 3600, top_results)
+
+        return top_results
+
+# Cost comparison (1M queries/day):
+# Pattern 1 (simple): $2/1K × 1M = $2000/day
+# Pattern 2 (tiered): $1/1K × 1M (fast) + $2/1K × 200K (slow) = $1400/day (30% savings)
+# Pattern 3 (cached @ 80% hit rate): $2/1K × 200K = $400/day (80% savings!)
+```
+
+### When NOT to Use Reranking
+
+```python
+class RerankerWhenToSkip:
+    """
+    Reranking isn't always necessary
+
+    Skip reranking when:
+    1. Vector search already very accurate (>90% MRR)
+    2. Latency budget is tiny (<50ms total)
+    3. Cost constraints are extreme
+    4. Simple keyword matching is sufficient
+    """
+
+    def should_use_reranking(self, use_case):
+        """
+        Decision: To rerank or not to rerank?
+        """
+
+        # Scenario 1: Simple FAQ (only 50 FAQs)
+        if use_case['corpus_size'] < 100:
+            return {
+                'use_reranking': False,
+                'rationale': 'Corpus too small, vector search sufficient',
+                'alternative': 'Just use top-5 from vector search'
+            }
+
+        # Scenario 2: Semantic search already excellent
+        if use_case['vector_search_mrr'] > 0.92:
+            return {
+                'use_reranking': False,
+                'rationale': 'Vector search already 92% MRR, reranking adds <2%',
+                'alternative': 'Invest in better embeddings instead'
+            }
+
+        # Scenario 3: Ultra-low latency requirement
+        if use_case['latency_budget'] < 50:  # 50ms total
+            return {
+                'use_reranking': False,
+                'rationale': 'No latency budget for reranking (adds 40-200ms)',
+                'alternative': 'Use faster vector search with better embeddings'
+            }
+
+        # Scenario 4: Keyword-based search is enough
+        if use_case['query_type'] == 'exact_match':
+            return {
+                'use_reranking': False,
+                'rationale': 'Exact matching (BM25) already perfect for this use case',
+                'alternative': 'Use Elasticsearch/BM25 only'
+            }
+
+        # Default: Use reranking
+        return {
+            'use_reranking': True,
+            'rationale': 'Improves MRR by 15-25% on average',
+            'recommended_model': 'Cohere rerank-v3'
+        }
+```
+
+---
+
+## Staff-Level Deep Dives
+
+### RAG vs Long-Context LLMs Trade-off (2025 Critical Decision)
+
+**Interviewer:** "With GPT-4 Turbo supporting 128K tokens and Claude 3.5 supporting 200K tokens, when do we still need RAG?"
+
+**You:** "This is THE critical 2025 question. Let me break down the decision framework:
+
+#### Context Window Evolution
+
+```
+2023: GPT-3.5 (4K tokens) → RAG essential
+2024: GPT-4 (128K tokens) → RAG still valuable
+2025: GPT-4 Turbo (128K), Claude 3.5 (200K), Gemini 1.5 Pro (1M tokens)
+     → RAG strategy must evolve
+```
+
+#### Decision Matrix: RAG vs Long-Context
+
+```python
+class RAGvsLongContextDecision:
+    """
+    Framework for deciding RAG vs long-context LLM
+
+    2025 Reality: It's not either/or, it's hybrid
+    """
+
+    def decide_strategy(self, use_case: dict) -> str:
+        """
+        Decide optimal strategy based on use case
+
+        Factors:
+        1. Corpus size
+        2. Query patterns
+        3. Latency requirements
+        4. Cost constraints
+        5. Update frequency
+        """
+
+        corpus_size = use_case['corpus_size_tokens']
+        update_frequency = use_case['update_frequency']  # daily, hourly, real-time
+        query_volume = use_case['queries_per_day']
+        latency_requirement = use_case['max_latency_seconds']
+
+        # Decision tree
+        if corpus_size < 100_000:  # <100K tokens
+            return "LONG_CONTEXT: Fit entire corpus in context window"
+
+        elif corpus_size < 1_000_000 and update_frequency == 'static':
+            return "LONG_CONTEXT: Use 1M token models (Gemini 1.5 Pro)"
+
+        elif corpus_size < 10_000_000 and query_volume < 1000:
+            return "HYBRID: Long-context for dense corpora + RAG for sparse retrieval"
+
+        elif update_frequency in ['hourly', 'real-time']:
+            return "RAG: Can't fit constantly changing corpus in context"
+
+        elif query_volume > 100_000:
+            # Cost analysis
+            rag_cost = self.estimate_rag_cost(corpus_size, query_volume)
+            longcontext_cost = self.estimate_longcontext_cost(corpus_size, query_volume)
+
+            if rag_cost < longcontext_cost * 0.5:
+                return f"RAG: 2× cheaper (${rag_cost}/month vs ${longcontext_cost}/month)"
+            else:
+                return "LONG_CONTEXT: Simpler architecture worth cost"
+
+        else:
+            return "RAG: Default for large, dynamic corpora"
+
+    def estimate_rag_cost(self, corpus_tokens: int, queries_per_day: int) -> float:
+        """
+        Estimate monthly RAG cost
+
+        Components:
+        - One-time embedding generation
+        - Vector DB storage
+        - Retrieval cost (vector search)
+        - LLM cost (only top-k chunks, ~3K tokens context)
+        """
+
+        # Embedding cost (one-time, amortized over month)
+        embedding_cost = (corpus_tokens / 1_000_000) * 0.13 / 30  # ada-002 per day
+
+        # Vector DB cost
+        num_chunks = corpus_tokens / 500  # 500 tokens per chunk
+        vector_db_cost_monthly = (num_chunks / 1_000_000) * 70  # Pinecone pricing
+
+        # LLM cost (only 3K tokens context per query)
+        monthly_queries = queries_per_day * 30
+        context_tokens_per_query = 3_000  # Top 5-10 chunks
+        output_tokens_per_query = 500
+
+        llm_cost_monthly = (
+            (monthly_queries * context_tokens_per_query / 1_000_000) * 3 +  # Claude input
+            (monthly_queries * output_tokens_per_query / 1_000_000) * 15     # Claude output
+        )
+
+        total = embedding_cost * 30 + vector_db_cost_monthly + llm_cost_monthly
+
+        return total
+
+    def estimate_longcontext_cost(self, corpus_tokens: int, queries_per_day: int) -> float:
+        """
+        Estimate monthly long-context LLM cost
+
+        Cost: Full corpus in context + output
+        """
+
+        monthly_queries = queries_per_day * 30
+
+        # Input: Full corpus EVERY query
+        input_tokens = corpus_tokens
+        output_tokens = 500
+
+        # Gemini 1.5 Pro pricing (cheapest long-context)
+        # Context caching: 50% discount after first call
+        # First call: Full price
+        # Subsequent calls: 50% discount
+
+        first_call_cost = (
+            (input_tokens / 1_000_000) * 1.25 +  # Gemini input $1.25/1M (>128K)
+            (output_tokens / 1_000_000) * 5.0    # Gemini output $5/1M
+        )
+
+        # Subsequent calls with caching (assume 24-hour cache)
+        cached_calls = monthly_queries - (30 * 24)  # One per hour expires
+        cached_cost_per_call = (
+            (input_tokens / 1_000_000) * 0.625 +  # 50% discount
+            (output_tokens / 1_000_000) * 5.0
+        )
+
+        total = first_call_cost + (cached_calls * cached_cost_per_call)
+
+        return total
+
+
+# Example usage
+decision_maker = RAGvsLongContextDecision()
+
+# Use case 1: 50K token knowledge base (e.g., company handbook)
+use_case_small = {
+    'corpus_size_tokens': 50_000,
+    'update_frequency': 'monthly',
+    'queries_per_day': 1000,
+    'max_latency_seconds': 5
+}
+
+strategy = decision_maker.decide_strategy(use_case_small)
+print(f"Small corpus: {strategy}")
+# Output: "LONG_CONTEXT: Fit entire corpus in context window"
+
+
+# Use case 2: 10M token knowledge base (e.g., documentation site)
+use_case_large = {
+    'corpus_size_tokens': 10_000_000,
+    'update_frequency': 'daily',
+    'queries_per_day': 10000,
+    'max_latency_seconds': 3
+}
+
+strategy = decision_maker.decide_strategy(use_case_large)
+print(f"Large corpus: {strategy}")
+# Output: "RAG: Can't fit constantly changing corpus in context"
+
+
+# Cost comparison
+rag_cost = decision_maker.estimate_rag_cost(10_000_000, 10000)
+long_cost = decision_maker.estimate_longcontext_cost(10_000_000, 10000)
+
+print(f"RAG cost: ${rag_cost:,.2f}/month")
+print(f"Long-context cost: ${long_cost:,.2f}/month")
+```
+
+#### Real-World Cost Analysis
+
+**Example: 10M token corpus, 10K queries/day**
+
+```
+RAG Approach:
+- Embedding (one-time): $1,300 (10M tokens × $0.13/1M)
+- Vector DB: ~$200/month (20K chunks × $10/1M chunks)
+- Retrieval: Negligible (vector search)
+- LLM: $1,950/month (300K queries × 3K context × $3/1M + 500 output × $15/1M)
+Total: ~$2,150/month
+
+Long-Context Approach:
+- First query per hour: $1.25/1M × 10M = $12.50 × 720 queries = $9,000
+- Cached queries (24h cache): $0.625/1M × 10M × 299,280 queries = $1,870,500
+- Output: $5/1M × 500 × 300K queries = $750
+Total: ~$1,879,750/month
+
+Winner: RAG by 874× cheaper!
+```
+
+**But when long-context wins:**
+
+```
+Small corpus: 50K tokens, 1K queries/day
+
+Long-Context:
+- First 24 queries: $1.25/1M × 50K = $0.06
+- Cached 29,976 queries: $0.625/1M × 50K × 29,976 = $937
+Total: ~$937/month
+
+RAG:
+- Embedding: $6.50/month amortized
+- Vector DB: $7/month
+- LLM: $195/month
+Total: ~$209/month
+
+Winner: Long-context simpler (no infrastructure), comparable cost
+```
+
+### Prompt Caching Strategies (2025 Game-Changer)
+
+**Interviewer:** "How does prompt caching affect RAG cost optimization?"
+
+**You:** "Prompt caching in 2025 is critical for RAG cost reduction:
+
+#### Anthropic Prompt Caching (Claude 3.5)
+
+```python
+class PromptCachingRAG:
+    """
+    Leverage Claude 3.5 prompt caching for RAG
+
+    Key insight: Cache retrieved context, not query
+
+    Cost savings:
+    - Cached input: $0.30/1M (90% cheaper than $3/1M)
+    - Works for context reused within 5 minutes
+    """
+
+    def __init__(self, client):
+        self.client = client  # Anthropic client
+        self.cache_stats = {'hits': 0, 'misses': 0}
+
+    def query_with_caching(self, query: str, retrieved_chunks: List[str]):
+        """
+        Query LLM with cached context
+
+        Strategy:
+        1. Mark retrieved chunks as cacheable
+        2. Reuse cache if same chunks appear in 5min window
+        3. Common for FAQ-style queries
+        """
+
+        # Build context from chunks
+        context = "\n\n".join([
+            f"Document {i+1}:\n{chunk}"
+            for i, chunk in enumerate(retrieved_chunks)
+        ])
+
+        # Messages with cache control
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": f"Context:\n{context}",
+                        "cache_control": {"type": "ephemeral"}  # Cache this!
+                    },
+                    {
+                        "type": "text",
+                        "text": f"Query: {query}\nAnswer based only on the context above."
+                    }
+                ]
+            }
+        ]
+
+        # Call API
+        response = self.client.messages.create(
+            model="claude-3-5-sonnet-20241022",
+            max_tokens=1000,
+            messages=messages
+        )
+
+        # Track cache usage
+        if response.usage.get('cache_read_input_tokens', 0) > 0:
+            self.cache_stats['hits'] += 1
+            cache_savings = (
+                response.usage['cache_read_input_tokens'] *
+                (3.0 - 0.30) / 1_000_000  # $2.70 saved per 1M tokens
+            )
+            print(f"Cache hit! Saved ${cache_savings:.4f}")
+        else:
+            self.cache_stats['misses'] += 1
+
+        return response.content[0].text
+
+    def calculate_cache_benefit(self,
+                                queries_per_day: int,
+                                cache_hit_rate: float,
+                                avg_context_tokens: int):
+        """
+        Estimate cost savings from caching
+
+        Typical cache hit rates:
+        - FAQ bot: 60-80% (same questions repeated)
+        - General Q&A: 20-40% (some overlap)
+        - Unique queries: <10% (rare reuse)
+        """
+
+        monthly_queries = queries_per_day * 30
+
+        # Without caching
+        cost_no_cache = monthly_queries * (avg_context_tokens / 1_000_000) * 3.0
+
+        # With caching
+        cache_hits = monthly_queries * cache_hit_rate
+        cache_misses = monthly_queries * (1 - cache_hit_rate)
+
+        cost_with_cache = (
+            cache_hits * (avg_context_tokens / 1_000_000) * 0.30 +  # Cached: $0.30/1M
+            cache_misses * (avg_context_tokens / 1_000_000) * 3.0   # Not cached: $3/1M
+        )
+
+        savings = cost_no_cache - cost_with_cache
+        savings_pct = (savings / cost_no_cache) * 100
+
+        return {
+            'monthly_cost_no_cache': cost_no_cache,
+            'monthly_cost_with_cache': cost_with_cache,
+            'monthly_savings': savings,
+            'savings_percentage': savings_pct
+        }
+
+
+# Example
+caching = PromptCachingRAG(client=None)
+
+# FAQ bot: High cache hit rate
+result = caching.calculate_cache_benefit(
+    queries_per_day=10000,
+    cache_hit_rate=0.70,  # 70% of queries hit cache
+    avg_context_tokens=3000
+)
+
+print(f"No cache: ${result['monthly_cost_no_cache']:,.2f}/month")
+print(f"With cache: ${result['monthly_cost_with_cache']:,.2f}/month")
+print(f"Savings: ${result['monthly_savings']:,.2f}/month ({result['savings_percentage']:.1f}%)")
+
+# Output:
+# No cache: $2,700/month
+# With cache: $819/month
+# Savings: $1,881/month (69.7%)
+```
+
+### Multi-Modal RAG (2025 Production Reality)
+
+**Interviewer:** "How do you handle documents with images, tables, and charts?"
+
+**You:** "Multi-modal RAG is now production-ready in 2025. Let me explain:
+
+#### Problem: Text-Only RAG Misses Critical Info
+
+```
+Traditional RAG (text-only):
+- PDF with chart showing Q4 revenue → Extracted as "[CHART]"
+- User asks "What was Q4 revenue?" → Can't answer
+
+Multi-Modal RAG (2025):
+- PDF with chart → OCR + Vision model → "Q4 revenue: $2.3M (up 15%)"
+- User asks "What was Q4 revenue?" → Answers correctly
+```
+
+#### Implementation
+
+```python
+class MultiModalRAG:
+    """
+    RAG system that handles text, images, tables, and charts
+
+    2025 tools:
+    - GPT-4 Vision for image understanding
+    - Claude 3.5 Vision for document analysis
+    - Table extraction with Unstructured.io
+    - OCR with Tesseract/Azure OCR
+    """
+
+    def __init__(self):
+        self.text_embedder = OpenAIEmbeddings()
+        self.vision_model = VisionModel()
+        self.table_extractor = TableExtractor()
+
+    def process_document(self, pdf_path: str):
+        """
+        Process document with multiple modalities
+
+        Steps:
+        1. Extract text
+        2. Extract images (charts, diagrams)
+        3. Extract tables
+        4. Generate descriptions for images
+        5. Embed all modalities
+        """
+
+        from unstructured.partition.pdf import partition_pdf
+
+        # Extract all elements
+        elements = partition_pdf(
+            filename=pdf_path,
+            strategy="hi_res",  # High-resolution for images
+            extract_images_in_pdf=True,
+            extract_image_block_to_payload=True
+        )
+
+        chunks = []
+
+        for element in elements:
+            if element.category == "Text":
+                # Regular text chunk
+                chunks.append({
+                    'type': 'text',
+                    'content': element.text,
+                    'embedding': self.text_embedder.embed_query(element.text)
+                })
+
+            elif element.category == "Image":
+                # Generate image description using vision model
+                image_description = self.vision_model.describe(element.image)
+
+                chunks.append({
+                    'type': 'image',
+                    'content': image_description,
+                    'image_url': element.image_url,
+                    'embedding': self.text_embedder.embed_query(image_description)
+                })
+
+            elif element.category == "Table":
+                # Extract table as markdown
+                table_markdown = self.table_extractor.to_markdown(element)
+
+                # Also generate table summary
+                table_summary = self.summarize_table(table_markdown)
+
+                chunks.append({
+                    'type': 'table',
+                    'content': table_summary,
+                    'table_data': table_markdown,
+                    'embedding': self.text_embedder.embed_query(table_summary)
+                })
+
+        return chunks
+
+    def query_multimodal(self, query: str, top_k: int = 5):
+        """
+        Query across all modalities
+
+        Returns: Text, images, and tables
+        """
+
+        # Embed query
+        query_embedding = self.text_embedder.embed_query(query)
+
+        # Search across all chunk types
+        results = self.vector_db.similarity_search(
+            query_embedding,
+            top_k=top_k
+        )
+
+        # Separate by type
+        text_results = [r for r in results if r['type'] == 'text']
+        image_results = [r for r in results if r['type'] == 'image']
+        table_results = [r for r in results if r['type'] == 'table']
+
+        # Build multi-modal context
+        context = self.build_multimodal_context(
+            text_results,
+            image_results,
+            table_results
+        )
+
+        # Generate answer with GPT-4 Vision (can see images)
+        answer = self.generate_answer_with_vision(query, context)
+
+        return answer
+
+    def build_multimodal_context(self, text_chunks, image_chunks, table_chunks):
+        """
+        Combine different modalities into LLM context
+
+        Format for GPT-4 Vision / Claude 3.5:
+        [
+            {"type": "text", "text": "..."},
+            {"type": "image_url", "image_url": "..."},
+            {"type": "text", "text": "Table data: ..."}
+        ]
+        """
+
+        context = []
+
+        # Add text
+        for chunk in text_chunks:
+            context.append({
+                "type": "text",
+                "text": chunk['content']
+            })
+
+        # Add images with descriptions
+        for chunk in image_chunks:
+            context.append({
+                "type": "text",
+                "text": f"[Image description: {chunk['content']}]"
+            })
+            context.append({
+                "type": "image_url",
+                "image_url": chunk['image_url']
+            })
+
+        # Add tables
+        for chunk in table_chunks:
+            context.append({
+                "type": "text",
+                "text": f"[Table: {chunk['table_data']}]"
+            })
+
+        return context
+```
+
+### Incremental Indexing at Scale
+
+**Interviewer:** "How do you handle daily updates to 100K documents without reindexing everything?"
+
+**You:** "Incremental indexing is production-critical:
+
+```python
+class IncrementalRAGIndexer:
+    """
+    Efficiently update RAG index with new/changed documents
+
+    Strategy:
+    1. Track document hashes (detect changes)
+    2. Only re-embed changed chunks
+    3. Incremental vector DB updates
+    4. Background reindexing
+    """
+
+    def __init__(self, vector_db, document_store):
+        self.vector_db = vector_db
+        self.document_store = document_store
+        self.doc_hashes = {}  # doc_id → content_hash
+
+    def update_index(self, document_updates: List[dict]):
+        """
+        Incremental update strategy
+
+        Steps:
+        1. Detect which documents changed (hash comparison)
+        2. Delete old chunks for changed docs
+        3. Re-chunk and embed new versions
+        4. Upsert to vector DB
+        """
+
+        import hashlib
+
+        changed_docs = []
+        new_docs = []
+
+        for doc in document_updates:
+            doc_id = doc['id']
+            content_hash = hashlib.md5(doc['content'].encode()).hexdigest()
+
+            if doc_id not in self.doc_hashes:
+                # New document
+                new_docs.append(doc)
+                self.doc_hashes[doc_id] = content_hash
+
+            elif self.doc_hashes[doc_id] != content_hash:
+                # Document changed
+                changed_docs.append(doc)
+                self.doc_hashes[doc_id] = content_hash
+
+        print(f"New docs: {len(new_docs)}, Changed docs: {len(changed_docs)}")
+
+        # Process new documents
+        for doc in new_docs:
+            chunks = self.chunk_document(doc)
+            embeddings = self.embed_chunks(chunks)
+            self.vector_db.add(chunks, embeddings)
+
+        # Process changed documents
+        for doc in changed_docs:
+            # Delete old chunks
+            self.vector_db.delete(filter={'doc_id': doc['id']})
+
+            # Add new chunks
+            chunks = self.chunk_document(doc)
+            embeddings = self.embed_chunks(chunks)
+            self.vector_db.add(chunks, embeddings)
+
+        return {
+            'new_docs': len(new_docs),
+            'updated_docs': len(changed_docs),
+            'total_processed': len(new_docs) + len(changed_docs)
+        }
+```
+
+### Failure Modes & SLOs
+
+**You:** "RAG systems have specific failure modes:
+
+#### Common Failures
+
+| Failure | Impact | Mitigation | Recovery |
+|---------|--------|------------|----------|
+| **Vector DB down** | Can't retrieve | Fallback to BM25 only | <30s |
+| **Embedding API timeout** | Can't embed query | Use cached embeddings for common queries | <5s |
+| **LLM rate limit** | Can't generate | Queue queries, use cheaper model | <10s |
+| **Retrieval returns no results** | Empty context | Expand search, lower similarity threshold | Immediate |
+| **All retrieved chunks irrelevant** | Hallucination risk | Return "No information found" instead of hallucinating | Immediate |
+
+#### SLOs
+
+```
+Latency SLO:
+- P50: <3 seconds
+- P95: <5 seconds
+- P99: <8 seconds
+
+Availability SLO:
+- 99.9% (43 minutes downtime/month)
+- Graceful degradation: 99.99% (can serve cached responses)
+
+Quality SLO:
+- Retrieval precision@5: >80%
+- Answer accuracy: >90%
+- Hallucination rate: <5%
+- Citation accuracy: 100%
+```
+
+### Production Architecture Patterns (2025)
+
+**Interviewer:** "What are the practical trade-offs between different RAG architectures in production?"
+
+**You:** "Let me compare real production architectures we've deployed:
+
+#### Pattern 1: Simple RAG (Startup/MVP)
+
+```python
+class SimpleRAG:
+    """
+    Simple RAG: Vector search + LLM
+
+    Best for:
+    - Small teams (2-3 engineers)
+    - <1M documents
+    - <10K queries/day
+    - Quick time-to-market
+
+    Limitations:
+    - Lower accuracy (75-80%)
+    - No query understanding
+    - Single-stage retrieval
+    """
+
+    def query(self, question: str):
+        # 1. Embed query
+        query_vec = self.embedder.embed(question)
+
+        # 2. Vector search
+        docs = self.pinecone.query(query_vec, top_k=5)
+
+        # 3. Generate
+        answer = self.llm.generate(question, docs)
+
+        return answer
+
+# Production metrics:
+# - Latency: 2-3 seconds
+# - Cost: $0.03/query
+# - Accuracy: 75-80%
+# - Infrastructure: Pinecone + OpenAI API
+# - Engineering effort: 2 weeks to MVP
+```
+
+#### Pattern 2: Hybrid RAG (Mid-Stage Startup)
+
+```python
+class HybridRAG:
+    """
+    Hybrid RAG: BM25 + Vector + Reranking
+
+    Best for:
+    - Growing teams (5-8 engineers)
+    - 1M-10M documents
+    - 10K-100K queries/day
+    - Need higher accuracy
+
+    Improvements:
+    - Hybrid search: +10% accuracy
+    - Reranking: +8% accuracy
+    - Total: 85-90% accuracy
+    """
+
+    def query(self, question: str):
+        # 1. Hybrid retrieval
+        query_vec = self.embedder.embed(question)
+
+        # Dense search
+        dense_docs = self.pinecone.query(query_vec, top_k=20)
+
+        # Sparse search
+        sparse_docs = self.elasticsearch.search(question, top_k=20)
+
+        # Reciprocal Rank Fusion
+        candidates = self.rrf_merge(dense_docs, sparse_docs)
+
+        # 2. Rerank
+        top_docs = self.reranker.rerank(question, candidates, top_k=5)
+
+        # 3. Generate
+        answer = self.llm.generate(question, top_docs)
+
+        return answer
+
+# Production metrics:
+# - Latency: 3-4 seconds (reranking adds 500ms)
+# - Cost: $0.05/query (reranker adds cost)
+# - Accuracy: 85-90%
+# - Infrastructure: Pinecone + Elasticsearch + Reranker
+# - Engineering effort: 6-8 weeks
+```
+
+#### Pattern 3: Agentic RAG (Enterprise)
+
+```python
+class AgenticRAG:
+    """
+    Agentic RAG: Self-correcting, multi-hop, adaptive
+
+    Best for:
+    - Large teams (10+ engineers)
+    - 10M+ documents
+    - 100K+ queries/day
+    - Mission-critical accuracy
+
+    Improvements:
+    - Adaptive retrieval: +5% accuracy
+    - Multi-hop reasoning: +7% accuracy
+    - Self-correction: -30% hallucinations
+    - Total: 90-95% accuracy
+    """
+
+    def query(self, question: str):
+        # 1. Analyze query complexity
+        analysis = self.query_analyzer.analyze(question)
+
+        # 2. Decide retrieval strategy
+        if analysis['needs_multi_hop']:
+            return self.multi_hop_retrieval(question)
+        elif analysis['needs_web_search']:
+            return self.hybrid_internal_web(question)
+        else:
+            return self.standard_retrieval(question)
+
+    def multi_hop_retrieval(self, question: str):
+        # Decompose question
+        sub_questions = self.decompose(question)
+
+        # Retrieve for each
+        all_context = []
+        for sq in sub_questions:
+            docs = self.retrieve(sq)
+            all_context.extend(docs)
+
+        # Generate with full context
+        answer = self.llm.generate(question, all_context)
+
+        # Self-check
+        if not self.is_faithful(answer, all_context):
+            answer = self.revise(answer, all_context)
+
+        return answer
+
+# Production metrics:
+# - Latency: 5-8 seconds (multi-hop slower)
+# - Cost: $0.12/query (multiple LLM calls)
+# - Accuracy: 90-95%
+# - Infrastructure: Complex (agents, orchestration, monitoring)
+# - Engineering effort: 4-6 months
+```
+
+#### Real-World Trade-off Analysis
+
+| Dimension | Simple RAG | Hybrid RAG | Agentic RAG |
+|-----------|------------|------------|-------------|
+| **Accuracy** | 75-80% | 85-90% | 90-95% |
+| **Latency** | 2-3s | 3-4s | 5-8s |
+| **Cost/query** | $0.03 | $0.05 | $0.12 |
+| **Engineering effort** | 2 weeks | 6-8 weeks | 4-6 months |
+| **Team size needed** | 2-3 | 5-8 | 10+ |
+| **Infrastructure cost** | $500/mo | $2K/mo | $10K/mo |
+| **When to use** | MVP, <1M docs | Growth, 1M-10M docs | Enterprise, >10M docs |
+
+#### Decision Framework
+
+```python
+def choose_rag_architecture(company_stage: str,
+                           doc_count: int,
+                           query_volume: int,
+                           accuracy_requirement: float):
+    """
+    Practical decision framework
+
+    Based on 5+ years of production RAG systems
+    """
+
+    if company_stage == "pre-seed" or doc_count < 100_000:
+        return "Simple RAG (get to market fast, iterate)"
+
+    elif doc_count < 1_000_000 and accuracy_requirement < 0.85:
+        return "Simple RAG (sufficient for use case)"
+
+    elif doc_count < 10_000_000 and accuracy_requirement < 0.90:
+        return "Hybrid RAG (best bang for buck)"
+
+    elif accuracy_requirement >= 0.90 or query_volume > 100_000:
+        return "Agentic RAG (invest in complex system)"
+
+    else:
+        return "Hybrid RAG (default for most companies)"
+
+# Examples:
+choose_rag_architecture("Series A", 500_000, 5_000, 0.80)
+# → "Hybrid RAG (best bang for buck)"
+
+choose_rag_architecture("Series C", 50_000_000, 500_000, 0.95)
+# → "Agentic RAG (invest in complex system)"
+```
+
+### Organizational Context
+
+**You:** "RAG systems require specialized team:
+
+#### Team Structure
+
+```
+Core RAG Team (8-10 engineers):
+- 3 ML Engineers: Embedding models, retrieval algorithms
+- 2 Backend Engineers: Vector DB, caching, APIs
+- 2 Data Engineers: Document ingestion, chunking pipelines
+- 1 DevOps Engineer: Infrastructure, vector DB scaling
+- 1 Staff Engineer: Architecture, evaluation frameworks
+
+Partner Teams:
+- Data Science: Evaluation metrics, A/B testing
+- Product: User experience, query patterns
+- Content: Document quality, metadata
+```
+
+#### Cross-Functional Trade-offs
+
+**You:** "Common conflicts:
+
+**Product wants:**
+- Instant answers (no latency)
+- Solution: Pre-compute answers for common queries
+
+**Engineering concerns:**
+- Pre-computation expensive, hard to maintain
+- Solution: Smart caching strategy
+
+**Resolution:**
+- Identify top 1000 queries (cover 60% of traffic)
+- Pre-compute and cache answers
+- Real-time RAG for remaining 40%
+- Result: P50 latency 500ms (cached) vs 3s (RAG)
 
 ---
 

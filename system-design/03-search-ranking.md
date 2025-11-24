@@ -33,51 +33,157 @@ This guide simulates a real ML system design interview focused on search ranking
 
 **You:** "Let me understand the requirements:
 
-1. **Use Case & Scale:**
-   - What are we searching? (web pages, products, videos, documents?)
-   - How many items in the corpus? (millions, billions?)
-   - How many queries per second?
-   - What's the query distribution? (head, torso, tail queries)
+1. **Use Case & Corpus:**
+   - What are we searching? (web pages, products, videos, documents, images?)
+   - Corpus size? (millions, billions of items?)
+   - How frequently does corpus change? (hourly, daily updates?)
+   - Query distribution? (20% head queries, 30% torso, 50% long-tail?)
+   - Query characteristics? (avg query length, typos frequency, multi-language?)
 
-2. **Latency & Quality:**
-   - What's the acceptable latency for search results?
-   - How many results to return per page?
-   - Do we support pagination?
-   - Real-time indexing needed or batch updates?
+2. **Scale & Traffic:**
+   - Queries per second (QPS)? Peak vs average?
+   - Geographic distribution? (single region or global?)
+   - Platform split? (web, mobile app, API)
+   - Seasonality? (Black Friday spikes, holiday traffic)
 
-3. **Ranking Objectives:**
-   - What defines relevance? (clicks, dwell time, conversions?)
-   - Are there multiple objectives? (relevance, freshness, diversity, monetization?)
-   - Personalized or uniform ranking?
+3. **Latency & Performance:**
+   - Acceptable latency for results? (p50, p95, p99)
+   - How many results per page? (10, 20, 100?)
+   - Pagination support? (infinite scroll or page-based?)
+   - Autocomplete/suggest needed? (what latency?)
 
-4. **Technical Constraints:**
-   - Existing infrastructure? (Elasticsearch, Solr, custom?)
-   - Budget for ML inference?
-   - Can we use transformer models (BERT) or limited to classical ML?"
+4. **Ranking Quality & Objectives:**
+   - How do we define relevance? (clicks, dwell time, conversions, ratings?)
+   - Multiple objectives? (relevance, freshness, diversity, revenue, brand safety?)
+   - Personalization level? (based on user history, location, preferences)
+   - Cold start: how to rank for new users or new items?
+
+5. **Query Understanding:**
+   - Spell correction needed? (typo tolerance)
+   - Synonym expansion? ("phone" → "smartphone", "mobile")
+   - Query intent detection? (navigational, informational, transactional)
+   - Multi-language support?
+
+6. **Indexing & Freshness:**
+   - Real-time indexing required? (new items visible immediately?)
+   - Index update frequency? (seconds, minutes, hours?)
+   - How to handle deleted/out-of-stock items?
+
+7. **Technical Constraints:**
+   - Existing search infrastructure? (Elasticsearch, Solr, Algolia, custom?)
+   - ML inference budget? (GPU costs acceptable?)
+   - Can we use heavy models? (BERT, transformers) or need lightweight?
+   - Storage budget for indexes and embeddings?"
 
 ### Interviewer's Answers
 
 **Interviewer:** "Good questions! Here's the scope:
 
-- **Use Case:** E-commerce product search (like Amazon)
-- **Scale:** 100M products in catalog, 50K queries/second peak
-- **Latency:** Return results in <200ms (p95)
-- **Results:** Top 20 products per query, support pagination
-- **Objectives:** Optimize for purchases (primary) and clicks (secondary)
-- **Personalization:** Yes, use user history
-- **Indexing:** Near real-time (new products visible in <5 minutes)
-- **Budget:** Can use BERT for final ranking, but need efficient retrieval"
+- **Use Case:** E-commerce product search (like Amazon/eBay)
+- **Corpus:** 100M products, growing 10K/day, 5% churn monthly
+- **Scale:** Average 20K QPS, Peak 50K QPS (Black Friday 3× spike)
+- **Query Distribution:**
+  - Head (20%): "iPhone", "laptop", "shoes" - 10M queries/day
+  - Torso (30%): "wireless bluetooth headphones" - 15M queries/day
+  - Long-tail (50%): "waterproof hiking boots size 10.5" - 25M queries/day
+- **Query Characteristics:** Avg length 3-4 words, 15% contain typos
 
-### Requirements Summary
+- **Latency Requirements:**
+  - Search results: p50 <100ms, p95 <200ms, p99 <300ms
+  - Autocomplete: p95 <50ms
+  - Return top 20 products per page, support 50 pages (1000 results total)
 
-**You:** "Perfect! Let me summarize:
+- **Ranking Objectives:**
+  - Primary: Conversion rate (purchases per impression)
+  - Secondary: Click-through rate (CTR)
+  - Tertiary: Revenue (price × conversion_prob)
+  - Constraints: Diversity (max 3 from same brand), freshness (boost new products)
+
+- **Personalization:**
+  - Use 90-day purchase/browse history
+  - Location-based (show items that ship to user's region)
+  - Price sensitivity (infer from user's past purchases)
+
+- **Query Understanding:**
+  - Spell correction: "ipone" → "iphone"
+  - Synonym expansion: "phone" → ["smartphone", "mobile", "cell phone"]
+  - Intent detection: brand search vs product search
+  - Multi-language: English primarily, Spanish support
+
+- **Indexing:**
+  - New products visible in <5 minutes
+  - Inventory updates (out-of-stock) in <1 minute
+  - Price updates in real-time (via cache invalidation)
+
+- **Infrastructure:**
+  - Can use Elasticsearch for retrieval
+  - GPU budget: $10K/day for ML ranking
+  - Can use BERT for final ranking (top-500 products only)
+
+- **Success Metrics:**
+  - NDCG@20 >0.85 (ranking quality)
+  - Zero-result rate <5% (query understanding quality)
+  - Conversion lift: +15% vs baseline ranking"
+
+### Requirements Summary & Back-of-Envelope Calculations
+
+**You:** "Perfect! Let me summarize with calculations:
 
 #### Functional Requirements
-- Search 100M products with natural language queries
-- Return top 20 relevant products per query
-- Personalized ranking based on user history
-- Support for filters (price, category, rating)
-- Near real-time indexing (<5 min for new products)
+- Search 100M products with natural language queries (3-4 words avg)
+- Multi-stage ranking: Retrieval (100M → 10K) → Light ranking (10K → 500) → BERT (500 → 20)
+- Personalized ranking based on 90-day user history
+- Query understanding: Spell correction, synonyms, intent detection
+- Filters: price range, category, brand, rating, availability
+- Near real-time indexing (<5 min for new products, <1 min for inventory)
+
+#### Non-Functional Requirements & Calculations
+
+**Scale:**
+- 50K QPS peak × 3600 seconds × 24 hours = **4.3B queries/day**
+- 100M products × 1KB metadata = **100GB** product data
+- User base: ~500M users (assume 1% active daily = 5M DAU)
+
+**Storage:**
+- Product metadata: 100M × 1KB = **100GB**
+- Product embeddings: 100M × 768 dim × 4 bytes = **307GB** (BERT embeddings)
+- Inverted index (Elasticsearch): ~5× raw data = **500GB**
+- User history: 500M users × 90 days × 10 actions/day × 100 bytes = **4.5TB**
+- Total: **~5.5TB**
+
+**Compute (ML Ranking):**
+- 4.3B queries/day × 500 products/query (BERT input) = 2.15T inferences/day
+- At 2ms per BERT inference = 4.3B GPU-seconds/day = 1.19M GPU-hours/day
+- This is way too expensive! Need optimization:
+  - Only rank top-500 (after retrieval): 4.3B × 500 = 2.15T → 4.3M GPU-hours/day
+  - Batch inference (64 queries): 4.3M / 64 = 67K GPU-hours/day
+  - With A100 at $2.16/hour = **$145K/day** (too expensive!)
+  - **Solution:** Use distilled model or cache embeddings
+  - Optimized cost: **$15K-20K/day**
+
+**Latency Budget (200ms p95):**
+- Query understanding: **20ms** (spell check, synonyms)
+- Retrieval (Elasticsearch): **50ms** (100M → 10K products)
+- Light ranking: **30ms** (10K → 500 products, simple scoring)
+- BERT ranking: **80ms** (500 → 20 products, batch inference)
+- Response assembly: **20ms** (JSON serialization, caching)
+- **Total: 200ms**
+
+**Quality Targets:**
+- NDCG@20: >0.85 (top-20 ranking quality)
+- MRR (Mean Reciprocal Rank): >0.70 (first relevant result position)
+- Conversion rate: >2% (2% of searches lead to purchase)
+- Zero-result rate: <5% (95% of queries return results)
+
+#### Key Challenges
+1. **Scale:** 50K QPS with 100M products requires efficient retrieval (can't rank all)
+2. **Latency:** 200ms with BERT is tight → need multi-stage funnel
+3. **Relevance vs Speed:** Trade-off between model complexity and latency
+4. **Cold Start:** New products have no engagement data, new users have no history
+5. **Query Understanding:** 15% typo rate, synonyms, intent ambiguity
+6. **Personalization:** Balance user preferences with diversity and discovery
+
+Does this capture everything?"
 
 #### Non-Functional Requirements
 - **Scale:** 50K QPS peak, 100M products
@@ -1075,6 +1181,54 @@ class LatencyOptimizations:
 
 ---
 
+## Phase 5: Production Metrics & Interview Preparation
+
+### Real Production Metrics (Google, Amazon 2025)
+
+**Scale at Google Search:**
+- 8.5 billion searches/day = ~100K QPS
+- Index: Hundreds of billions of web pages
+- Latency: <200ms p95 for query to result
+- NDCG@10: Target >0.90 for commercial queries
+
+**Amazon Product Search:**
+- 50K QPS peak (Prime Day: 200K QPS)
+- 100M+ products indexed
+- Latency: <150ms p95
+- Conversion lift: +20-30% from ML ranking vs baseline
+
+**Cost Analysis (at 50K QPS):**
+- BERT inference: $15K-20K/day (GPU compute)
+- BM25 retrieval: $2K/day (Elasticsearch cluster)
+- Feature store: $3K/day (Redis + DynamoDB)
+- Total: ~$25K/day = $750K/month
+
+**Cost Optimization:**
+- Model distillation: 60% cost savings
+- INT8 quantization: 4x throughput increase
+- FAISS IVF-PQ: 100x faster than exact search
+
+### Common Interview Mistakes
+
+**Mistake 1:** Jumping straight to BERT without explaining retrieval stage
+**Better:** "With 100M products, we can't run BERT on all. I'll use 3-stage funnel: BM25 (100M→10K), Light ranker (10K→500), BERT (500→100)"
+
+**Mistake 2:** Not discussing query understanding
+**Better:** Mention spell correction, query expansion, synonym matching before retrieval
+
+**Mistake 3:** Ignoring cold start for new products
+**Better:** "New products have no click data. I'll use content-based features (title, description embeddings) and transfer learning from similar products"
+
+### Follow-Up Questions
+
+**Q:** "How do you handle typos in queries?"
+**A:** "Two-stage: 1) Detect typos with edit distance + language model perplexity, 2) Correct using spell-check dictionary + context-aware BERT corrections. Show 'Did you mean X?' if confidence >0.9"
+
+**Q:** "What if BERT is too slow?"
+**A:** "Use distillation (BERT-Large → BERT-Tiny), quantization (FP32 → INT8), ONNX Runtime, and only apply to top 500 candidates after lighter rankers"
+
+---
+
 ## Summary & Key Takeaways
 
 **You:** "To summarize the Search Ranking system:
@@ -1109,6 +1263,1111 @@ This design demonstrates:
 - Learning-to-rank with BERT
 - Latency optimization techniques
 - Scalability to billions of documents"
+
+---
+
+## Staff-Level Deep Dives
+
+### Query Understanding Pipeline
+
+**Interviewer:** "How do you handle complex query understanding beyond basic spell correction?"
+
+**You:** "Query understanding is critical for search quality. Let me detail our full pipeline:
+
+#### Comprehensive Query Processing
+
+```python
+class QueryUnderstandingPipeline:
+    """
+    Multi-stage query understanding pipeline
+
+    Stages:
+    1. Spell correction
+    2. Query normalization
+    3. Intent classification
+    4. Entity recognition
+    5. Query expansion
+    6. Query reformulation
+    """
+
+    def __init__(self):
+        self.spell_checker = SpellCorrector()
+        self.intent_classifier = IntentClassifier()
+        self.entity_recognizer = EntityRecognizer()
+        self.query_expander = QueryExpander()
+        self.query_reformulator = QueryReformulator()
+
+    def process(self, raw_query: str, user_context: Dict) -> ProcessedQuery:
+        """
+        Process raw query through understanding pipeline
+
+        Returns:
+            ProcessedQuery with corrections, intent, entities, expansions
+        """
+
+        # Stage 1: Spell correction
+        corrected_query = self.spell_checker.correct(raw_query)
+
+        # Stage 2: Normalization
+        normalized_query = self.normalize(corrected_query)
+
+        # Stage 3: Intent classification
+        intent = self.intent_classifier.classify(normalized_query, user_context)
+
+        # Stage 4: Entity recognition
+        entities = self.entity_recognizer.extract(normalized_query)
+
+        # Stage 5: Query expansion
+        expanded_terms = self.query_expander.expand(normalized_query, intent)
+
+        # Stage 6: Query reformulation (if needed)
+        if self.should_reformulate(normalized_query, intent):
+            reformulated = self.query_reformulator.reformulate(
+                normalized_query,
+                intent,
+                entities
+            )
+        else:
+            reformulated = None
+
+        return ProcessedQuery(
+            original=raw_query,
+            corrected=corrected_query,
+            normalized=normalized_query,
+            intent=intent,
+            entities=entities,
+            expanded_terms=expanded_terms,
+            reformulated=reformulated
+        )
+
+
+class SpellCorrector:
+    """
+    Context-aware spell correction
+
+    Approaches:
+    1. Edit distance with frequency-based ranking
+    2. Phonetic matching (Soundex, Metaphone)
+    3. BERT-based contextual correction
+    """
+
+    def __init__(self):
+        # Dictionary of correct spellings with frequencies
+        self.word_freq = self.load_word_frequencies()
+
+        # Common misspellings → corrections
+        self.correction_map = self.load_correction_map()
+
+        # BERT for contextual corrections
+        self.bert_corrector = BertSpellCorrector()
+
+    def correct(self, query: str) -> CorrectionResult:
+        """
+        Correct spelling errors in query
+
+        Returns:
+            CorrectionResult with corrected query and confidence
+        """
+
+        words = query.lower().split()
+        corrected_words = []
+        corrections = []
+
+        for word in words:
+            # Check if misspelled
+            if self.is_correct(word):
+                corrected_words.append(word)
+                continue
+
+            # Try correction map first (common typos)
+            if word in self.correction_map:
+                correction = self.correction_map[word]
+                corrected_words.append(correction)
+                corrections.append({
+                    'original': word,
+                    'correction': correction,
+                    'method': 'lookup',
+                    'confidence': 0.95
+                })
+                continue
+
+            # Edit distance candidates
+            candidates = self.get_edit_distance_candidates(word, max_distance=2)
+
+            if not candidates:
+                # No good candidates, keep original
+                corrected_words.append(word)
+                continue
+
+            # Rank candidates by frequency
+            best_candidate = max(candidates, key=lambda w: self.word_freq.get(w, 0))
+
+            # Use BERT for context-aware selection
+            if len(candidates) > 1:
+                context = ' '.join(words)
+                best_candidate = self.bert_corrector.select_best(
+                    word,
+                    candidates,
+                    context
+                )
+
+            corrected_words.append(best_candidate)
+            corrections.append({
+                'original': word,
+                'correction': best_candidate,
+                'method': 'edit_distance',
+                'confidence': 0.80
+            })
+
+        corrected_query = ' '.join(corrected_words)
+
+        # Overall confidence
+        if not corrections:
+            confidence = 1.0
+        else:
+            confidence = sum(c['confidence'] for c in corrections) / len(corrections)
+
+        return CorrectionResult(
+            original=query,
+            corrected=corrected_query,
+            corrections=corrections,
+            confidence=confidence,
+            show_did_you_mean=confidence > 0.9 and corrected_query != query
+        )
+
+    def get_edit_distance_candidates(self, word: str, max_distance: int = 2):
+        """
+        Generate candidates within edit distance threshold
+
+        Edit operations: insert, delete, substitute, transpose
+        """
+
+        candidates = set()
+
+        # Distance 1
+        for i in range(len(word)):
+            # Delete
+            candidates.add(word[:i] + word[i+1:])
+
+            # Substitute
+            for c in 'abcdefghijklmnopqrstuvwxyz':
+                candidates.add(word[:i] + c + word[i+1:])
+
+            # Transpose
+            if i < len(word) - 1:
+                candidates.add(word[:i] + word[i+1] + word[i] + word[i+2:])
+
+        # Insert
+        for i in range(len(word) + 1):
+            for c in 'abcdefghijklmnopqrstuvwxyz':
+                candidates.add(word[:i] + c + word[i:])
+
+        # Filter to valid words
+        valid_candidates = [c for c in candidates if c in self.word_freq]
+
+        # If max_distance > 1, recursively generate distance-2 candidates
+        if max_distance > 1 and not valid_candidates:
+            for candidate in candidates:
+                valid_candidates.extend(
+                    self.get_edit_distance_candidates(candidate, max_distance - 1)
+                )
+
+        return valid_candidates
+
+
+class IntentClassifier:
+    """
+    Classify query intent
+
+    Intents:
+    - Navigational: "amazon prime" (user wants specific brand/site)
+    - Informational: "how to use wireless mouse" (user wants info)
+    - Transactional: "buy bluetooth headphones" (user wants to purchase)
+    - Product: "gaming laptop under $1000" (user browsing products)
+    """
+
+    def __init__(self):
+        # Trained classifier
+        self.model = self.load_intent_model()
+
+    def classify(self, query: str, user_context: Dict) -> Intent:
+        """
+        Classify query intent using multiple signals
+
+        Features:
+        - Query text (keywords, n-grams)
+        - User history (past searches, purchases)
+        - Session context (previous queries in session)
+        """
+
+        # Extract features
+        features = self.extract_features(query, user_context)
+
+        # Predict intent
+        intent_probs = self.model.predict_proba(features)
+
+        # Intent categories
+        intents = ['navigational', 'informational', 'transactional', 'product']
+
+        predicted_intent = intents[np.argmax(intent_probs)]
+        confidence = np.max(intent_probs)
+
+        return Intent(
+            type=predicted_intent,
+            confidence=confidence,
+            probs={intent: prob for intent, prob in zip(intents, intent_probs)}
+        )
+
+    def extract_features(self, query: str, user_context: Dict):
+        """Extract intent classification features"""
+
+        features = []
+
+        # Query features
+        query_lower = query.lower()
+
+        # Navigational signals
+        features.append(int(any(brand in query_lower for brand in ['amazon', 'apple', 'google', 'nike'])))
+
+        # Informational signals
+        features.append(int(any(word in query_lower for word in ['how', 'what', 'why', 'when', 'guide', 'tutorial'])))
+
+        # Transactional signals
+        features.append(int(any(word in query_lower for word in ['buy', 'purchase', 'order', 'cheap', 'deal', 'price'])))
+
+        # Product signals
+        features.append(int(any(word in query_lower for word in ['best', 'top', 'review', 'compare'])))
+
+        # User history features
+        if user_context.get('recent_purchases', 0) > 0:
+            features.append(1)  # User has purchase history
+        else:
+            features.append(0)
+
+        # Session features
+        features.append(user_context.get('session_query_count', 0))
+        features.append(user_context.get('session_click_count', 0))
+
+        return features
+
+
+class QueryExpander:
+    """
+    Expand query with synonyms, related terms
+
+    Techniques:
+    1. Synonym expansion (WordNet, custom synonyms)
+    2. Embedding-based expansion (find similar terms)
+    3. Co-occurrence expansion (terms that appear together)
+    4. User behavior expansion (users who search X also search Y)
+    """
+
+    def __init__(self):
+        self.synonym_dict = self.load_synonyms()
+        self.word_embeddings = self.load_word2vec()
+        self.cooccurrence_matrix = self.load_cooccurrence()
+
+    def expand(self, query: str, intent: Intent, max_expansions: int = 5):
+        """
+        Expand query with related terms
+
+        Returns:
+            List of expansion terms
+        """
+
+        words = query.lower().split()
+        expansions = set()
+
+        for word in words:
+            # Synonym expansion
+            if word in self.synonym_dict:
+                synonyms = self.synonym_dict[word][:2]  # Top 2 synonyms
+                expansions.update(synonyms)
+
+            # Embedding-based expansion
+            if word in self.word_embeddings:
+                similar_words = self.word_embeddings.most_similar(word, topn=3)
+                expansions.update([w for w, score in similar_words if score > 0.7])
+
+            # Co-occurrence expansion
+            if word in self.cooccurrence_matrix:
+                cooccurring = self.cooccurrence_matrix.get_top_cooccurring(word, k=2)
+                expansions.update(cooccurring)
+
+        # Limit expansions
+        return list(expansions)[:max_expansions]
+
+
+class QueryReformulator:
+    """
+    Reformulate queries that are likely to return poor results
+
+    Examples:
+    - "ipone 15" → "iphone 15" (spell correction)
+    - "cheap laptop" → "laptop under $500" (add specificity)
+    - "gaming" → "gaming laptop" OR "gaming mouse" OR "gaming headset" (add context)
+    """
+
+    def reformulate(self, query: str, intent: Intent, entities: List[Entity]):
+        """
+        Reformulate query to improve results
+
+        Heuristics:
+        - Too short (<2 words) → add category
+        - Too generic → add filters
+        - Ambiguous → disambiguate with context
+        """
+
+        words = query.split()
+
+        # Too short
+        if len(words) == 1:
+            # Add likely category based on word
+            category = self.infer_category(words[0])
+            if category:
+                return f"{query} {category}"
+
+        # Too generic (very high-volume head query)
+        if self.is_generic_query(query):
+            # Add specificity based on user history
+            # Example: "laptop" → "laptop for programming" (based on user's past searches)
+            personalization = self.get_personalization_term(query)
+            if personalization:
+                return f"{query} {personalization}"
+
+        return query
+```
+
+### Position Bias Correction
+
+**Interviewer:** "How do you correct for position bias in training data?"
+
+**You:** "Position bias is critical - users click top results more regardless of relevance. Let me explain:
+
+#### Problem: Position Bias
+
+```
+Scenario:
+Position 1: Document A - 10% CTR
+Position 5: Document B - 2% CTR
+
+Question: Is A more relevant than B?
+Answer: Not necessarily! Position 1 has ~5× higher CTR due to position bias.
+```
+
+#### Solution: Inverse Propensity Weighting (IPW)
+
+```python
+class PositionBiasCorrection:
+    """
+    Correct for position bias in click data
+
+    Key Idea:
+    - Clicks at lower positions are more informative
+    - Weight clicks by inverse of position propensity
+    - P(click | position=k, relevant) vs P(click | position=k, irrelevant)
+    """
+
+    def __init__(self):
+        # Position propensity: P(examine | position)
+        # Estimated from randomized experiments
+        self.position_propensity = {
+            1: 1.0,    # Position 1: Always examined
+            2: 0.85,   # Position 2: 85% examination rate
+            3: 0.70,
+            4: 0.55,
+            5: 0.40,
+            10: 0.15,
+            20: 0.05
+        }
+
+    def compute_ipw_weight(self, position: int) -> float:
+        """
+        Inverse propensity weight for position
+
+        IPW = 1 / P(examine | position)
+
+        Lower positions get higher weights
+        """
+
+        propensity = self.position_propensity.get(position, 0.01)
+        ipw = 1.0 / propensity
+
+        return ipw
+
+    def train_with_ipw(self, click_data: List[ClickEvent]):
+        """
+        Train ranking model with position bias correction
+
+        Each click is weighted by IPW
+        """
+
+        training_examples = []
+
+        for event in click_data:
+            query = event.query
+            clicked_doc = event.document
+            position = event.position
+
+            # Compute IPW weight
+            weight = self.compute_ipw_weight(position)
+
+            # Positive example (clicked)
+            training_examples.append({
+                'query': query,
+                'document': clicked_doc,
+                'label': 1,  # Relevant
+                'weight': weight
+            })
+
+            # Negative examples (shown but not clicked)
+            for doc in event.shown_documents:
+                if doc != clicked_doc:
+                    training_examples.append({
+                        'query': query,
+                        'document': doc,
+                        'label': 0,  # Not clicked (assumed irrelevant)
+                        'weight': weight * 0.1  # Lower weight for negatives
+                    })
+
+        # Train model with sample weights
+        self.model.fit(
+            X=training_examples,
+            sample_weight=[ex['weight'] for ex in training_examples]
+        )
+
+    def estimate_position_propensity(self, click_logs: List[ClickEvent]):
+        """
+        Estimate position propensity from randomized experiments
+
+        Method: Intervention Harvesting
+        - Find queries where same (query, doc) pair shown at different positions
+        - Compare click rates
+        - P(click | pos=k) = P(examine | pos=k) × P(relevant)
+        """
+
+        # Group by (query, document)
+        position_clicks = defaultdict(lambda: defaultdict(list))
+
+        for event in click_logs:
+            key = (event.query, event.document)
+            position = event.position
+            clicked = event.clicked
+
+            position_clicks[key][position].append(clicked)
+
+        # Estimate propensity
+        propensities = {}
+
+        for position in range(1, 21):
+            click_rates = []
+
+            for (query, doc), pos_data in position_clicks.items():
+                if position in pos_data:
+                    ctr = sum(pos_data[position]) / len(pos_data[position])
+                    click_rates.append(ctr)
+
+            if click_rates:
+                # Average CTR at this position
+                propensities[position] = np.mean(click_rates)
+
+        # Normalize to position 1
+        baseline = propensities.get(1, 1.0)
+        for pos in propensities:
+            propensities[pos] /= baseline
+
+        return propensities
+
+
+class UnbiasedLearningToRank:
+    """
+    Unbiased LTR using counterfactual learning
+
+    Combines:
+    1. Inverse Propensity Weighting (IPW)
+    2. Dual Learning Algorithm (DLA)
+    3. Regression EM for propensity estimation
+    """
+
+    def __init__(self):
+        self.ranker = LambdaMARTRanker()
+        self.position_bias_model = PositionBiasCorrection()
+
+    def train_unbiased(self, click_data, validation_data):
+        """
+        Train unbiased ranker
+
+        Steps:
+        1. Estimate position propensities
+        2. Weight training examples by IPW
+        3. Train ranker with weighted loss
+        4. Validate on unbiased dataset (if available)
+        """
+
+        # Estimate propensities
+        propensities = self.position_bias_model.estimate_position_propensity(
+            click_data
+        )
+
+        # Train with IPW
+        self.position_bias_model.train_with_ipw(click_data)
+
+        # Validate
+        if validation_data:
+            ndcg = self.evaluate_unbiased(validation_data)
+            print(f"Unbiased NDCG@10: {ndcg:.3f}")
+```
+
+### Diversity & MMR
+
+**Interviewer:** "How do you ensure diversity in search results?"
+
+**You:** "Diversity prevents showing 20 iPhones when user searches 'smartphone'. Let me explain:
+
+#### Maximal Marginal Relevance (MMR)
+
+```python
+class DiversityRanker:
+    """
+    Ensure diverse search results using MMR
+
+    MMR = argmax [λ × Relevance(d, q) - (1-λ) × max Similarity(d, d_i)]
+                d
+
+    Where:
+    - d: Candidate document
+    - q: Query
+    - d_i: Already selected documents
+    - λ: Relevance vs diversity trade-off (0.7 typical)
+    """
+
+    def __init__(self, lambda_param: float = 0.7):
+        self.lambda_param = lambda_param
+
+    def rerank_with_diversity(self,
+                             query: str,
+                             candidates: List[Document],
+                             k: int = 20) -> List[Document]:
+        """
+        Rerank candidates to maximize diversity
+
+        Args:
+            query: Search query
+            candidates: Retrieved documents (sorted by relevance)
+            k: Number of results to return
+
+        Returns:
+            Diversified top-k results
+        """
+
+        # Compute relevance scores
+        relevance_scores = {
+            doc.id: self.compute_relevance(query, doc)
+            for doc in candidates
+        }
+
+        # Compute pairwise similarity matrix
+        similarity_matrix = self.compute_similarity_matrix(candidates)
+
+        # Greedy MMR selection
+        selected = []
+        remaining = set(doc.id for doc in candidates)
+
+        for _ in range(k):
+            if not remaining:
+                break
+
+            # Compute MMR score for each remaining document
+            mmr_scores = {}
+
+            for doc_id in remaining:
+                relevance = relevance_scores[doc_id]
+
+                # Max similarity to already selected documents
+                if selected:
+                    max_similarity = max(
+                        similarity_matrix[doc_id][sel_id]
+                        for sel_id in selected
+                    )
+                else:
+                    max_similarity = 0
+
+                # MMR score
+                mmr = (
+                    self.lambda_param * relevance -
+                    (1 - self.lambda_param) * max_similarity
+                )
+
+                mmr_scores[doc_id] = mmr
+
+            # Select document with highest MMR
+            best_doc_id = max(mmr_scores, key=mmr_scores.get)
+
+            selected.append(best_doc_id)
+            remaining.remove(best_doc_id)
+
+        # Return documents in selected order
+        doc_map = {doc.id: doc for doc in candidates}
+        return [doc_map[doc_id] for doc_id in selected]
+
+    def compute_similarity_matrix(self, documents: List[Document]):
+        """
+        Compute pairwise document similarity
+
+        Use embeddings or features:
+        - Title embeddings (BERT)
+        - Category similarity
+        - Brand similarity
+        """
+
+        n = len(documents)
+        similarity = {}
+
+        for i, doc_i in enumerate(documents):
+            similarity[doc_i.id] = {}
+
+            for j, doc_j in enumerate(documents):
+                if i == j:
+                    sim = 1.0
+                else:
+                    # Cosine similarity of embeddings
+                    sim = self.cosine_similarity(
+                        doc_i.embedding,
+                        doc_j.embedding
+                    )
+
+                    # Boost similarity if same category/brand
+                    if doc_i.category == doc_j.category:
+                        sim = min(1.0, sim + 0.2)
+
+                    if doc_i.brand == doc_j.brand:
+                        sim = min(1.0, sim + 0.3)
+
+                similarity[doc_i.id][doc_j.id] = sim
+
+        return similarity
+
+
+class CategoryDiversityFilter:
+    """
+    Ensure diversity across categories/brands
+
+    Rules:
+    - Max 3 products per brand in top 20
+    - Max 5 products per category in top 20
+    - At least 3 different brands in top 10
+    """
+
+    def apply_diversity_constraints(self, ranked_results: List[Document]):
+        """
+        Apply hard constraints on diversity
+        """
+
+        filtered = []
+        brand_counts = defaultdict(int)
+        category_counts = defaultdict(int)
+
+        for doc in ranked_results:
+            # Check constraints
+            if brand_counts[doc.brand] >= 3:
+                continue  # Skip, too many from this brand
+
+            if category_counts[doc.category] >= 5:
+                continue  # Skip, too many from this category
+
+            # Add to results
+            filtered.append(doc)
+            brand_counts[doc.brand] += 1
+            category_counts[doc.category] += 1
+
+            # Stop at 20 results
+            if len(filtered) >= 20:
+                break
+
+        return filtered
+```
+
+### Zero-Result Query Handling
+
+**Interviewer:** "What do you do when a query returns no results?"
+
+**You:** "Zero-result queries hurt user experience. Let me explain our strategy:
+
+#### Progressive Query Relaxation
+
+```python
+class ZeroResultHandler:
+    """
+    Handle queries that return no results
+
+    Strategy:
+    1. Try exact query
+    2. Remove filters (price, brand, etc.)
+    3. Try spell-corrected query
+    4. Try synonym expansion
+    5. Try partial match (remove least important terms)
+    6. Show related categories
+    7. Show popular products as fallback
+    """
+
+    def __init__(self):
+        self.ranker = SearchRanker()
+        self.spell_corrector = SpellCorrector()
+        self.query_expander = QueryExpander()
+
+    def search_with_fallback(self, query: str, filters: Dict):
+        """
+        Search with progressive fallback
+
+        Returns results + explanation of what was relaxed
+        """
+
+        # Stage 1: Exact query with all filters
+        results = self.ranker.search(query, filters)
+        if len(results) > 0:
+            return results, "exact_match"
+
+        # Stage 2: Remove filters
+        results = self.ranker.search(query, filters={})
+        if len(results) > 0:
+            return results, "removed_filters"
+
+        # Stage 3: Spell correction
+        corrected_query = self.spell_corrector.correct(query).corrected
+        if corrected_query != query:
+            results = self.ranker.search(corrected_query, filters={})
+            if len(results) > 0:
+                return results, f"spell_corrected:{corrected_query}"
+
+        # Stage 4: Synonym expansion
+        expanded_query = self.expand_with_synonyms(query)
+        results = self.ranker.search(expanded_query, filters={})
+        if len(results) > 0:
+            return results, "synonym_expansion"
+
+        # Stage 5: Partial match (remove least important words)
+        partial_query = self.remove_least_important_terms(query)
+        results = self.ranker.search(partial_query, filters={})
+        if len(results) > 0:
+            return results, f"partial_match:{partial_query}"
+
+        # Stage 6: Show related categories
+        categories = self.get_related_categories(query)
+        if categories:
+            results = self.get_popular_in_categories(categories)
+            return results, "related_categories"
+
+        # Stage 7: Fallback to popular products
+        results = self.get_popular_products(limit=20)
+        return results, "popular_fallback"
+
+    def remove_least_important_terms(self, query: str) -> str:
+        """
+        Remove least important terms using TF-IDF
+
+        Example: "rare vintage blue gaming mouse" → "gaming mouse"
+        """
+
+        terms = query.split()
+
+        # Compute term importance (inverse document frequency)
+        term_scores = {
+            term: self.get_term_importance(term)
+            for term in terms
+        }
+
+        # Keep most important terms
+        sorted_terms = sorted(terms, key=lambda t: term_scores[t], reverse=True)
+
+        # Keep top 50% of terms (at least 1)
+        keep_count = max(1, len(terms) // 2)
+        important_terms = sorted_terms[:keep_count]
+
+        # Preserve original order
+        partial_query = ' '.join([t for t in terms if t in important_terms])
+
+        return partial_query
+```
+
+### Evolution & A/B Testing
+
+**Interviewer:** "How do you A/B test ranking changes?"
+
+**You:** "Search A/B testing is tricky due to carryover effects. Let me explain:
+
+#### Interleaving for A/B Testing
+
+```python
+class InterleavingExperiment:
+    """
+    Interleaving: Show results from two rankers mixed together
+
+    Better than traditional A/B test because:
+    - Same user sees both rankers (within-subject comparison)
+    - More sensitive (needs less traffic)
+    - Avoids session carryover effects
+
+    Types:
+    - Team Draft Interleaving
+    - Balanced Interleaving
+    - Optimized Interleaving
+    """
+
+    def __init__(self, ranker_a, ranker_b):
+        self.ranker_a = ranker_a  # Control (production)
+        self.ranker_b = ranker_b  # Treatment (new model)
+
+    def team_draft_interleaving(self, query: str, k: int = 20):
+        """
+        Team Draft Interleaving
+
+        1. Ranker A and B each produce ranking
+        2. Alternate selecting from each ranking (like draft)
+        3. Show interleaved results to user
+        4. Track which ranker's results got more clicks
+        """
+
+        # Get rankings from both models
+        ranking_a = self.ranker_a.rank(query)
+        ranking_b = self.ranker_b.rank(query)
+
+        # Team draft: alternate selection
+        interleaved = []
+        assigned = []  # Track which ranker contributed each result
+
+        idx_a, idx_b = 0, 0
+
+        for i in range(k):
+            # Alternate between rankers
+            if i % 2 == 0:
+                # Team A's turn
+                while idx_a < len(ranking_a):
+                    doc = ranking_a[idx_a]
+                    idx_a += 1
+
+                    if doc not in interleaved:
+                        interleaved.append(doc)
+                        assigned.append('A')
+                        break
+            else:
+                # Team B's turn
+                while idx_b < len(ranking_b):
+                    doc = ranking_b[idx_b]
+                    idx_b += 1
+
+                    if doc not in interleaved:
+                        interleaved.append(doc)
+                        assigned.append('B')
+                        break
+
+            if len(interleaved) >= k:
+                break
+
+        return InterleaveResult(
+            results=interleaved,
+            assignments=assigned
+        )
+
+    def analyze_clicks(self, interleave_result: InterleaveResult, clicks: List[int]):
+        """
+        Analyze which ranker won
+
+        Winner: Ranker whose results got more clicks
+        """
+
+        clicks_a = sum(1 for pos in clicks if interleave_result.assignments[pos] == 'A')
+        clicks_b = sum(1 for pos in clicks if interleave_result.assignments[pos] == 'B')
+
+        if clicks_a > clicks_b:
+            return 'A'
+        elif clicks_b > clicks_a:
+            return 'B'
+        else:
+            return 'tie'
+
+    def run_experiment(self, queries: List[str], num_days: int = 7):
+        """
+        Run full interleaving experiment
+
+        Returns:
+        - Win rate for each ranker
+        - Statistical significance
+        """
+
+        wins = {'A': 0, 'B': 0, 'tie': 0}
+
+        for query in queries:
+            # Interleave rankings
+            interleave_result = self.team_draft_interleaving(query)
+
+            # Show to user, collect clicks
+            clicks = self.collect_user_clicks(interleave_result.results)
+
+            # Determine winner
+            winner = self.analyze_clicks(interleave_result, clicks)
+            wins[winner] += 1
+
+        # Statistical significance (binomial test)
+        from scipy import stats
+
+        n = wins['A'] + wins['B']  # Exclude ties
+        k = wins['B']  # Successes (ranker B wins)
+        p_value = stats.binom_test(k, n, p=0.5, alternative='two-sided')
+
+        is_significant = p_value < 0.05
+
+        return {
+            'wins_a': wins['A'],
+            'wins_b': wins['B'],
+            'ties': wins['tie'],
+            'win_rate_b': wins['B'] / n if n > 0 else 0,
+            'p_value': p_value,
+            'is_significant': is_significant,
+            'recommendation': 'SHIP ranker B' if is_significant and wins['B'] > wins['A'] else 'KEEP ranker A'
+        }
+```
+
+### Failure Modes & SLOs
+
+**You:** "Search is mission-critical. Here are our failure modes and SLOs:
+
+#### Common Failure Modes
+
+| Failure | Impact | Mitigation | Recovery Time |
+|---------|--------|------------|---------------|
+| **Elasticsearch down** | Can't retrieve candidates | Multi-cluster setup, automatic failover to standby | <30 seconds |
+| **FAISS index corrupted** | Dense retrieval fails | Fallback to BM25 only, rebuild index from embeddings | <5 minutes |
+| **BERT serving timeout** | Ranking degraded | Fallback to LightGBM ranker, increase timeout | Immediate |
+| **Feature store down** | Missing user features | Use default features (no personalization) | <1 minute |
+| **Query understanding service down** | No spell correction | Pass through raw query, degraded quality | Immediate |
+
+#### SLOs
+
+```
+Latency SLO:
+- P50: <100ms
+- P95: <200ms
+- P99: <300ms
+
+Availability SLO:
+- 99.95% uptime (22 minutes downtime/month)
+- Degraded mode: 99.99% (can serve results without personalization)
+
+Quality SLO:
+- NDCG@20: >0.85 (measured on editorial labels)
+- Zero-result rate: <5%
+- Conversion rate: >2%
+
+Freshness SLO:
+- New products indexed: <5 minutes
+- Inventory updates: <1 minute
+- Price updates: <30 seconds (via cache)
+```
+
+### Long-Term Maintenance
+
+**Interviewer:** "How do you maintain search quality over time?"
+
+**You:** "Search degrades without maintenance. Here's our approach:
+
+#### Model Retraining Schedule
+
+```
+LightGBM Ranker:
+- Retrain: Daily (user preferences change fast)
+- Training data: Last 30 days of clicks/purchases
+- Features: ~100 features (query-doc match, popularity, user affinity)
+- Validation: Offline NDCG + online A/B test
+
+BERT Ranker:
+- Retrain: Weekly (expensive, slower to degrade)
+- Training data: Last 90 days
+- Features: Query-doc interaction embeddings
+- Validation: Interleaving experiment before deployment
+
+Query Understanding Models:
+- Spell corrector: Monthly (vocabulary stable)
+- Intent classifier: Bi-weekly (user behavior shifts)
+- Entity recognizer: Quarterly (entities stable)
+
+Embeddings:
+- Product embeddings: Weekly (new products, updated descriptions)
+- Query embeddings: On-demand (cached for popular queries)
+```
+
+#### When to Re-architect
+
+```
+Re-architect signals:
+1. Latency SLO violated for >1 week
+   → Investigate: Is BERT too slow? Need model distillation?
+
+2. Quality plateau (NDCG not improving for 3+ months)
+   → Consider: Transformer XL, or multi-task learning
+
+3. Cost growing >20% faster than QPS
+   → Optimize: Model compression, better caching, cheaper infrastructure
+
+4. Zero-result rate increasing (>5%)
+   → Improve: Query understanding, expand corpus, better synonyms
+
+5. New retrieval paradigm (e.g., LLM-based search)
+   → Experiment: GPT-4 for query reformulation, semantic re-ranking
+```
+
+### Organizational Context
+
+**You:** "Search requires a cross-functional team:
+
+#### Team Structure
+
+```
+Core Search Team (15 engineers):
+- 4 ML Engineers: Ranking models, BERT, embeddings
+- 4 Backend Engineers: Elasticsearch, FAISS, serving infrastructure
+- 3 Data Engineers: Feature pipelines, click logs, training data
+- 2 Relevance Engineers: Query understanding, spell correction
+- 1 Staff Engineer: Architecture, technical lead
+- 1 Engineering Manager: Team management, roadmap
+
+Partner Teams:
+- Catalog Team: Product data quality, indexing
+- Personalization Team: User profiles, recommendations
+- Infra Team: Elasticsearch cluster, FAISS serving
+- Data Science: A/B testing, metrics analysis
+- Product: Relevance targets, business requirements
+
+On-Call:
+- 24/7 on-call (search is critical user path)
+- Rotation: 1 week shifts, 4 engineers
+- Escalation: Staff engineer → EM → Director
+```
+
+#### Cross-Functional Trade-offs
+
+**You:** "Common conflicts:
+
+**Product wants:**
+- More personalization (boost recently viewed products)
+- Solution: Personalization features in ranker
+
+**Finance wants:**
+- Lower costs (reduce GPU usage)
+- Solution: Model distillation, INT8 quantization
+
+**Resolution:**
+- Cost target: <$30K/day for 50K QPS
+- Distillation reduces cost 60% with <2% NDCG drop
+- A/B test confirms acceptable quality-cost trade-off
+
+**Catalog team wants:**
+- Index updates every minute (fresh data)
+- Search team concerns: Reindexing overhead, cache invalidation
+
+**Resolution:**
+- Compromise: Hot products (<1% of catalog) update every 1 minute
+- Cold products: Update every 5 minutes
+- Reduces load 80% while keeping 99% of searches fresh
 
 ---
 

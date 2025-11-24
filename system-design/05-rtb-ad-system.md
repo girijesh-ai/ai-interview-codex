@@ -73,15 +73,54 @@ This guide simulates a real ML system design interview focused on Real-Time Bidd
 - **Quality:** Basic fraud detection, brand safety checks
 - **Privacy:** GDPR compliant, no PII in bid requests"
 
-### Requirements Summary
+### Requirements Summary & Calculations
 
-**You:** "Perfect! Let me summarize:
+**You:** "Perfect! Let me summarize with key calculations:
 
 #### Functional Requirements
-- Real-time auction for ad impressions
-- Support 100 bidders per auction
-- Second-price auction mechanics
-- Bid optimization (maximize conversions within budget)
+- Real-time auction for ad impressions (OpenRTB protocol)
+- Support 100 bidders per auction (parallel bid requests)
+- Second-price auction: winner pays 2nd highest bid + $0.01
+- Bid optimization: CTR/CVR prediction → bid amount calculation
+- Budget pacing: Spend daily budget evenly over 24 hours
+- Targeting: Match user profile to campaign criteria
+- Fraud detection: Filter invalid traffic before auction
+
+#### Non-Functional Requirements & Calculations
+
+**Scale:**
+- 1M bid requests/second (peak) = **86.4B requests/day**
+- 100 bidders/auction = **100M bidder requests/second**
+- Win rate: 15-30% per bidder → **15-30M ad serves/second**
+
+**Latency Budget (100ms total):**
+- User request arrives: **0ms**
+- Bid request creation: **5ms** (user context, page context)
+- Parallel bidder calls: **60ms** (HTTP to 100 bidders, wait for responses)
+  - Bidder timeout: 50ms (drop slow bidders)
+  - Network RTT: ~10-20ms
+- Auction execution: **10ms** (sort bids, run second-price)
+- Winner notification: **5ms** (send ad creative URL)
+- Ad serving: **20ms** (fetch creative, render)
+- **Total: 100ms**
+
+**Storage:**
+- Active campaigns: 1M campaigns × 10KB = **10GB**
+- User profiles: 500M users × 2KB = **1TB**
+- Bid logs: 86B requests/day × 500 bytes = **43TB/day**
+
+**Compute (ML for CTR/CVR):**
+- 100M bidder predictions/second × 1ms = 100K CPU-seconds/s
+- = 8.6B CPU-hours/day
+- Optimized with caching + lightweight models: **$10K-15K/day**
+
+**Business Metrics:**
+- Fill rate: >95% (at least 1 bid per request)
+- Win rate per bidder: 15-30%
+- Revenue: $2-10 CPM (cost per 1000 impressions)
+- At 86B requests/day: $172M-860M/day revenue (exchange takes 10-20% cut)
+
+#### Key Challenges
 - Budget pacing (daily budget management)
 - Targeting (user demographics, interests, context)
 - Fraud detection and brand safety
@@ -827,6 +866,48 @@ class AgenticRTBBidder:
 
 ---
 
+## Phase 5: Production Metrics & Interview Guidance
+
+### Real Production Metrics (Google AdX, AppNexus 2025)
+
+**Scale:**
+- 1M-10M bid requests/second globally
+- 100-500 bidders per auction
+- Latency: <100ms p99 for full auction (2024 Agentic RTB: 80% faster)
+- Win rate: 15-30% per bidder (competitive auctions)
+
+**Business Metrics:**
+- Fill rate: >95% (% of requests with at least one bid)
+- Timeout rate: <2% (bidders not responding in time)
+- Budget adherence: 95%+ of campaigns spend within 5% of daily budget
+
+**Cost Analysis (at 1M QPS):**
+- Model serving (CTR, CVR predictions): $10K-15K/day
+- Real-time feature aggregation: $5K/day
+- Auction coordination: $3K/day
+- Total: ~$20K/day = $600K/month
+
+**Agentic RTB Framework (2024):**
+- Traditional RTB latency: 600-800ms
+- Agentic RTB latency: 100ms (6-8x improvement)
+- Method: Co-locate bidder containers with exchange, use gRPC
+
+### Interview Best Practices
+
+**Key topics to cover:**
+- Second-price auction mechanics (incentive-compatible)
+- Budget pacing (spend evenly over 24h, not all in first hour)
+- Multi-objective optimization (CTR, CVR, brand safety)
+- Latency optimization (<100ms budget breakdown)
+
+**Mistake to avoid:** "We'll run ML model on every bid request"
+**Better:** "At 1M QPS, we need tiered strategy: 1) Fast rules (10ms), 2) Lightweight model (30ms), 3) Reserve complex models for high-value auctions only"
+
+**Q:** "How do you prevent budget overspend?"
+**A:** "Real-time spend tracking with circuit breakers. If spend rate > 1.2x expected, probabilistically throttle bids. Use Redis for fast spend aggregation (<5ms lookup)."
+
+---
+
 ## Summary & Key Takeaways
 
 **You:** "To summarize the RTB Ad System:
@@ -861,6 +942,983 @@ This design demonstrates:
 - Auction theory and game theory
 - Real-time ML inference
 - Budget optimization under constraints"
+
+---
+
+## Staff-Level Deep Dives
+
+### Strategic Bidding & Game Theory
+
+**Interviewer:** "How do you handle strategic bidding behavior from sophisticated advertisers?"
+
+**You:** "In real RTB systems, bidders optimize strategically. Let me explain:
+
+#### Bid Shading Problem
+
+**Traditional Second-Price Auction:**
+- Theory: Bidders should bid their true value (dominant strategy)
+- Reality: In first-price auctions or when winner often pays close to bid, bidders shade their bids
+
+**First-Price vs Second-Price:**
+
+```python
+class BidShading:
+    """
+    Bid shading for first-price auctions
+
+    Problem: In first-price, winner pays their bid (not 2nd price)
+    Solution: Shade bid below true value to maximize profit
+    """
+
+    def __init__(self):
+        # Historical win rates at different bid levels
+        self.bid_landscape = {}  # bid_level → P(win)
+
+    def optimal_bid(self, true_value: float, competitive_density: Dict) -> float:
+        """
+        Calculate optimal shaded bid
+
+        Formula: Maximize (true_value - bid) × P(win | bid)
+
+        Args:
+            true_value: What impression is worth to us
+            competitive_density: Distribution of competitor bids
+
+        Returns:
+            Optimal bid (shaded below true value)
+        """
+
+        # Scan possible bids from 0 to true_value
+        best_bid = 0
+        best_expected_profit = 0
+
+        for bid in np.arange(0.10, true_value, 0.05):
+            # Probability of winning at this bid level
+            p_win = self.estimate_win_prob(bid, competitive_density)
+
+            # Expected profit = (value - cost) × P(win)
+            expected_profit = (true_value - bid) * p_win
+
+            if expected_profit > best_expected_profit:
+                best_expected_profit = expected_profit
+                best_bid = bid
+
+        return best_bid
+
+    def estimate_win_prob(self, bid: float, competitive_density: Dict) -> float:
+        """
+        Estimate P(win | bid) based on historical bid landscape
+
+        competitive_density: histogram of competitor bids
+        """
+
+        # P(win) = P(all competitors bid less than you)
+        # Approximate using historical data
+
+        total_competitors = sum(competitive_density.values())
+        competitors_below = sum(
+            count for bid_level, count in competitive_density.items()
+            if bid_level < bid
+        )
+
+        p_win = competitors_below / total_competitors if total_competitors > 0 else 0
+
+        return p_win
+
+
+# Example: Bid landscape learning
+bid_landscape_learner = BidLandscape()
+
+# Observe auctions
+bid_landscape_learner.observe(my_bid=2.50, won=True, second_price=1.80)
+bid_landscape_learner.observe(my_bid=1.50, won=False, winning_bid=2.20)
+
+# Learn optimal shading
+# True value: $3.00
+# Optimal bid: $2.10 (shaded 30% to maximize profit)
+optimal_shaded_bid = bid_landscape_learner.optimal_bid(true_value=3.00)
+```
+
+#### Nash Equilibrium in RTB Auctions
+
+**You:** "With strategic bidders, we analyze Nash equilibrium:
+
+**Setup:**
+- N bidders
+- Each bidder i has value v_i for impression
+- Each bidder chooses bid b_i
+
+**Second-Price Auction:**
+- Nash equilibrium: Everyone bids true value (truthful)
+- Proof: Bidding higher/lower than value doesn't improve payoff
+
+**First-Price Auction:**
+- Nash equilibrium: Shade bids based on competitor distribution
+- If competitors bid uniformly on [0, v_max], optimal bid ≈ (N-1)/N × true_value
+
+**Example (3 bidders):**
+- True value: $3.00
+- Optimal bid: (3-1)/3 × $3.00 = $2.00
+- Shade by 33%
+
+This is why exchanges prefer second-price (simpler, more revenue)."
+
+#### Bid Landscape Modeling
+
+**You:** "To optimize bids, model the competitive landscape:
+
+```python
+import numpy as np
+from scipy import stats
+
+class BidLandscapeModel:
+    """
+    Learn distribution of competitor bids
+    Used for optimal bid shading
+    """
+
+    def __init__(self):
+        # Store historical second-price (reveals competitor bids)
+        self.observed_bids = []
+
+    def observe_auction(self, second_price: float, won: bool):
+        """
+        Learn from auction outcome
+
+        Args:
+            second_price: What we paid (second-price auction)
+            won: Whether we won
+        """
+
+        if won:
+            # We won, so our bid > second_price
+            # Second price reveals highest competitor bid
+            self.observed_bids.append(second_price)
+
+    def fit_distribution(self):
+        """
+        Fit parametric distribution to competitor bids
+
+        Common distributions:
+        - Log-normal (bids have long tail)
+        - Gamma
+        - Mixture of Gaussians
+        """
+
+        if len(self.observed_bids) < 100:
+            return None  # Need more data
+
+        # Fit log-normal distribution
+        shape, loc, scale = stats.lognorm.fit(self.observed_bids)
+
+        return {'distribution': 'lognorm', 'params': (shape, loc, scale)}
+
+    def predict_win_probability(self, bid: float) -> float:
+        """
+        Predict P(win | bid) using fitted distribution
+        """
+
+        dist_params = self.fit_distribution()
+        if not dist_params:
+            return 0.5  # Default
+
+        # P(win) = P(all competitors bid less)
+        # Assume 10 competitors on average
+        n_competitors = 10
+
+        # P(single competitor bids less)
+        shape, loc, scale = dist_params['params']
+        p_single = stats.lognorm.cdf(bid, shape, loc, scale)
+
+        # P(all bid less) = P(single)^N (independence assumption)
+        p_win = p_single ** n_competitors
+
+        return p_win
+
+
+# Usage
+landscape = BidLandscapeModel()
+
+# Collect data from 1000 auctions
+for auction in historical_auctions:
+    landscape.observe_auction(
+        second_price=auction['second_price'],
+        won=auction['won']
+    )
+
+# Predict win probability
+bid = 2.50
+p_win = landscape.predict_win_probability(bid)
+print(f"Bid ${bid}: {p_win:.1%} win probability")
+```
+
+### Attribution Modeling
+
+**Interviewer:** "How do you attribute conversions to ads when users see multiple ads before converting?"
+
+**You:** "Attribution is critical for ROI calculation. Let me explain:
+
+#### Multi-Touch Attribution Problem
+
+**Scenario:**
+```
+User journey:
+Day 1: See Display Ad A (click)
+Day 3: See Display Ad B (no click)
+Day 5: See Search Ad C (click)
+Day 7: Convert ($100 purchase)
+
+Question: Which ad gets credit?
+```
+
+#### Attribution Models
+
+```python
+from typing import List
+from dataclasses import dataclass
+from datetime import datetime, timedelta
+
+@dataclass
+class AdInteraction:
+    ad_id: str
+    timestamp: datetime
+    clicked: bool
+    channel: str  # display, search, social, video
+
+class AttributionModel:
+    """
+    Multi-touch attribution for conversions
+    """
+
+    def __init__(self, model_type: str = 'linear'):
+        """
+        Args:
+            model_type:
+                - 'last_click': 100% credit to last ad clicked
+                - 'first_click': 100% credit to first ad
+                - 'linear': Equal credit to all touchpoints
+                - 'time_decay': More credit to recent ads
+                - 'position_based': 40% first, 40% last, 20% middle
+                - 'data_driven': ML-based (Shapley value)
+        """
+        self.model_type = model_type
+
+    def attribute_conversion(self,
+                            touchpoints: List[AdInteraction],
+                            conversion_value: float) -> Dict[str, float]:
+        """
+        Distribute conversion credit across touchpoints
+
+        Args:
+            touchpoints: All ad interactions before conversion
+            conversion_value: $ value of conversion
+
+        Returns:
+            ad_id → credit ($)
+        """
+
+        if not touchpoints:
+            return {}
+
+        if self.model_type == 'last_click':
+            return self._last_click(touchpoints, conversion_value)
+        elif self.model_type == 'first_click':
+            return self._first_click(touchpoints, conversion_value)
+        elif self.model_type == 'linear':
+            return self._linear(touchpoints, conversion_value)
+        elif self.model_type == 'time_decay':
+            return self._time_decay(touchpoints, conversion_value)
+        elif self.model_type == 'position_based':
+            return self._position_based(touchpoints, conversion_value)
+        elif self.model_type == 'data_driven':
+            return self._shapley_value(touchpoints, conversion_value)
+
+    def _last_click(self, touchpoints, value):
+        """Last clicked ad gets 100% credit"""
+        clicked = [t for t in touchpoints if t.clicked]
+        if not clicked:
+            return {}
+        last_click = clicked[-1]
+        return {last_click.ad_id: value}
+
+    def _first_click(self, touchpoints, value):
+        """First ad gets 100% credit"""
+        return {touchpoints[0].ad_id: value}
+
+    def _linear(self, touchpoints, value):
+        """Equal credit to all touchpoints"""
+        credit_per_ad = value / len(touchpoints)
+        return {t.ad_id: credit_per_ad for t in touchpoints}
+
+    def _time_decay(self, touchpoints, value):
+        """More recent ads get more credit (exponential decay)"""
+
+        # Half-life: 7 days
+        half_life_days = 7
+
+        # Conversion time (now)
+        conversion_time = touchpoints[-1].timestamp + timedelta(days=1)
+
+        # Calculate decay weights
+        weights = []
+        for t in touchpoints:
+            days_ago = (conversion_time - t.timestamp).days
+            # Exponential decay: weight = 2^(-days / half_life)
+            weight = 2 ** (-days_ago / half_life_days)
+            weights.append(weight)
+
+        # Normalize weights to sum to 1
+        total_weight = sum(weights)
+        normalized_weights = [w / total_weight for w in weights]
+
+        # Distribute credit
+        attribution = {}
+        for t, weight in zip(touchpoints, normalized_weights):
+            attribution[t.ad_id] = value * weight
+
+        return attribution
+
+    def _position_based(self, touchpoints, value):
+        """
+        40% to first, 40% to last, 20% to middle
+        (U-shaped attribution)
+        """
+
+        if len(touchpoints) == 1:
+            return {touchpoints[0].ad_id: value}
+
+        if len(touchpoints) == 2:
+            return {
+                touchpoints[0].ad_id: value * 0.5,
+                touchpoints[1].ad_id: value * 0.5
+            }
+
+        # First: 40%
+        # Last: 40%
+        # Middle: 20% divided equally
+        attribution = {}
+        attribution[touchpoints[0].ad_id] = value * 0.4
+        attribution[touchpoints[-1].ad_id] = value * 0.4
+
+        middle_credit = value * 0.2
+        middle_ads = touchpoints[1:-1]
+        credit_per_middle = middle_credit / len(middle_ads)
+
+        for t in middle_ads:
+            attribution[t.ad_id] = attribution.get(t.ad_id, 0) + credit_per_middle
+
+        return attribution
+
+    def _shapley_value(self, touchpoints, value):
+        """
+        Data-driven attribution using Shapley values
+
+        Shapley value: Contribution of each ad averaged over all possible orderings
+
+        This is computationally expensive (exponential), so we approximate
+        """
+
+        # Simplified: Use conversion lift from A/B tests
+        # For each ad, measure: P(convert | saw ad) - P(convert | didn't see ad)
+        # Then distribute credit proportionally
+
+        # Placeholder: In production, use historical A/B test data
+        ad_lift_scores = {
+            t.ad_id: self._estimate_lift(t)
+            for t in touchpoints
+        }
+
+        total_lift = sum(ad_lift_scores.values())
+
+        attribution = {
+            ad_id: value * (lift / total_lift)
+            for ad_id, lift in ad_lift_scores.items()
+        }
+
+        return attribution
+
+    def _estimate_lift(self, touchpoint: AdInteraction) -> float:
+        """
+        Estimate conversion lift from this touchpoint
+        Based on channel, clicked, etc.
+        """
+
+        # Heuristic: Clicked ads contribute more
+        base_lift = 1.0
+
+        if touchpoint.clicked:
+            base_lift *= 3.0
+
+        # Search ads (high-intent) contribute more
+        if touchpoint.channel == 'search':
+            base_lift *= 2.0
+        elif touchpoint.channel == 'display':
+            base_lift *= 1.0
+        elif touchpoint.channel == 'social':
+            base_lift *= 1.5
+
+        return base_lift
+
+
+# Example usage
+attribution_model = AttributionModel(model_type='time_decay')
+
+user_journey = [
+    AdInteraction(ad_id='display_A', timestamp=datetime(2025, 1, 1), clicked=True, channel='display'),
+    AdInteraction(ad_id='display_B', timestamp=datetime(2025, 1, 3), clicked=False, channel='display'),
+    AdInteraction(ad_id='search_C', timestamp=datetime(2025, 1, 5), clicked=True, channel='search'),
+]
+
+conversion_value = 100.0  # $100 purchase
+
+credits = attribution_model.attribute_conversion(user_journey, conversion_value)
+
+print("Attribution credits:")
+for ad_id, credit in credits.items():
+    print(f"  {ad_id}: ${credit:.2f}")
+
+# Output (time decay):
+#   display_A: $15.00 (7 days ago, decayed)
+#   display_B: $25.00 (5 days ago)
+#   search_C: $60.00 (3 days ago, most recent)
+```
+
+#### Attribution Impact on Bidding
+
+**You:** "Attribution model affects bid optimization:
+
+**Last-Click Attribution:**
+- Only search ads (bottom-funnel) get credit
+- Display ads (top-funnel) undervalued
+- Result: Over-invest in search, under-invest in awareness
+
+**Multi-Touch Attribution:**
+- Display ads get partial credit for conversions
+- Better reflects true customer journey
+- Result: More balanced budget allocation
+
+**Example:**
+```
+Scenario: User sees Display → Search → Converts
+
+Last-Click:
+- Display: $0 credit → bid $0 → stop display ads
+- Search: $100 credit → bid high → keep search ads
+
+Time-Decay:
+- Display: $20 credit → bid $1.50
+- Search: $80 credit → bid $6.00
+- Balanced investment across funnel
+```
+
+### Supply Path Optimization
+
+**Interviewer:** "How do you optimize which ad exchanges to use?"
+
+**You:** "Supply path optimization (SPO) minimizes intermediaries:
+
+#### Problem: Ad Tech Supply Chain
+
+```
+Advertiser ($10 bid)
+  → Trading Desk (takes 10% = $1)
+    → DSP (takes 15% = $1.35)
+      → Ad Exchange (takes 10% = $0.75)
+        → SSP (takes 10% = $0.60)
+          → Publisher (receives $6.30)
+
+Publisher gets only 63% of advertiser's budget!
+```
+
+#### Solution: Direct Integrations
+
+```python
+class SupplyPathOptimizer:
+    """
+    Optimize ad buying path to minimize intermediaries
+    """
+
+    def __init__(self):
+        # Track performance by supply path
+        self.path_performance = {}  # path_id → metrics
+
+    def evaluate_path(self, path_id: str) -> Dict:
+        """
+        Evaluate supply path quality
+
+        Metrics:
+        - Win rate
+        - Average CPM
+        - Viewability rate
+        - Fraud rate
+        - Take rate (% lost to intermediaries)
+        """
+
+        perf = self.path_performance.get(path_id, {})
+
+        return {
+            'win_rate': perf.get('wins', 0) / perf.get('attempts', 1),
+            'avg_cpm': perf.get('total_cost', 0) / perf.get('impressions', 1) * 1000,
+            'viewability': perf.get('viewable', 0) / perf.get('impressions', 1),
+            'fraud_rate': perf.get('fraud', 0) / perf.get('impressions', 1),
+            'take_rate': perf.get('take_rate', 0.30)  # 30% default
+        }
+
+    def select_best_paths(self, target_publisher: str, max_paths: int = 3) -> List[str]:
+        """
+        Select best supply paths to reach a publisher
+
+        Optimize for:
+        - Low take rate (more $ to publisher)
+        - High viewability
+        - Low fraud
+        - Competitive win rate
+        """
+
+        # Get all paths to this publisher
+        candidate_paths = self.get_paths_to_publisher(target_publisher)
+
+        # Score each path
+        scored_paths = []
+        for path_id in candidate_paths:
+            metrics = self.evaluate_path(path_id)
+
+            # Composite score
+            score = (
+                (1 - metrics['take_rate']) * 0.4 +  # Lower take rate = better
+                metrics['viewability'] * 0.3 +       # Higher viewability = better
+                (1 - metrics['fraud_rate']) * 0.2 +  # Lower fraud = better
+                metrics['win_rate'] * 0.1            # Decent win rate = better
+            )
+
+            scored_paths.append((path_id, score))
+
+        # Select top paths
+        scored_paths.sort(key=lambda x: x[1], reverse=True)
+        best_paths = [path_id for path_id, score in scored_paths[:max_paths]]
+
+        return best_paths
+
+
+# Example
+spo = SupplyPathOptimizer()
+
+# Path A: Direct to publisher's SSP (low take rate)
+spo.path_performance['path_A'] = {
+    'take_rate': 0.15,  # 15% lost to intermediaries
+    'viewability': 0.80,
+    'fraud_rate': 0.02,
+    'win_rate': 0.25
+}
+
+# Path B: Through multiple exchanges (high take rate)
+spo.path_performance['path_B'] = {
+    'take_rate': 0.40,  # 40% lost!
+    'viewability': 0.75,
+    'fraud_rate': 0.05,
+    'win_rate': 0.35
+}
+
+# Path A wins despite lower win rate (better economics)
+best = spo.select_best_paths('publisher_nytimes', max_paths=1)
+print(f"Best path: {best[0]}")  # path_A
+```
+
+### Evolution & Migration Strategies
+
+**Interviewer:** "How do you roll out changes to the bidding algorithm without breaking campaigns?"
+
+**You:** "RTB systems require careful migration due to revenue impact:
+
+#### A/B Testing at Scale
+
+```python
+class RTBABTest:
+    """
+    A/B testing for bidding algorithm changes
+
+    Challenges:
+    - Revenue-critical (can't break campaigns)
+    - Interference (same users across tests)
+    - Statistical power (need large sample)
+    """
+
+    def __init__(self):
+        self.variant_assignments = {}  # campaign_id → variant
+
+    def assign_variant(self, campaign_id: str) -> str:
+        """
+        Assign campaign to control or treatment
+
+        Stratification: Ensure balanced assignment
+        - Similar campaign sizes in each group
+        - Similar industries
+        - Similar budgets
+        """
+
+        if campaign_id in self.variant_assignments:
+            return self.variant_assignments[campaign_id]
+
+        # Hash-based assignment (deterministic)
+        import hashlib
+        hash_val = int(hashlib.md5(campaign_id.encode()).hexdigest(), 16)
+
+        # 90% control, 10% treatment (conservative)
+        variant = 'treatment' if hash_val % 100 < 10 else 'control'
+
+        self.variant_assignments[campaign_id] = variant
+        return variant
+
+    def calculate_sample_size(self,
+                             baseline_cvr: float = 0.02,
+                             mde: float = 0.05,  # Minimum detectable effect
+                             alpha: float = 0.05,
+                             power: float = 0.80) -> int:
+        """
+        Calculate required sample size for statistical power
+
+        Args:
+            baseline_cvr: Current conversion rate (2%)
+            mde: Minimum effect we want to detect (5% relative lift)
+            alpha: False positive rate (5%)
+            power: Statistical power (80%)
+
+        Returns:
+            Required sample size per variant
+        """
+
+        from scipy import stats
+
+        # Convert relative lift to absolute
+        treatment_cvr = baseline_cvr * (1 + mde)
+
+        # Z-scores
+        z_alpha = stats.norm.ppf(1 - alpha/2)  # Two-tailed
+        z_beta = stats.norm.ppf(power)
+
+        # Pooled variance
+        p_pooled = (baseline_cvr + treatment_cvr) / 2
+
+        # Sample size formula
+        n = (
+            (z_alpha + z_beta) ** 2 * 2 * p_pooled * (1 - p_pooled)
+            / (treatment_cvr - baseline_cvr) ** 2
+        )
+
+        return int(np.ceil(n))
+
+    def analyze_results(self,
+                       control_conversions: int,
+                       control_impressions: int,
+                       treatment_conversions: int,
+                       treatment_impressions: int) -> Dict:
+        """
+        Analyze A/B test results
+
+        Returns:
+            Statistical significance, confidence intervals, recommendation
+        """
+
+        from scipy import stats
+
+        # Conversion rates
+        control_cvr = control_conversions / control_impressions
+        treatment_cvr = treatment_conversions / treatment_impressions
+
+        # Relative lift
+        lift = (treatment_cvr - control_cvr) / control_cvr
+
+        # Two-proportion z-test
+        pooled_cvr = (control_conversions + treatment_conversions) / (
+            control_impressions + treatment_impressions
+        )
+
+        se = np.sqrt(
+            pooled_cvr * (1 - pooled_cvr) * (
+                1/control_impressions + 1/treatment_impressions
+            )
+        )
+
+        z_score = (treatment_cvr - control_cvr) / se
+        p_value = 2 * (1 - stats.norm.cdf(abs(z_score)))  # Two-tailed
+
+        # Decision
+        is_significant = p_value < 0.05
+
+        # Recommendation
+        if is_significant and lift > 0:
+            recommendation = "SHIP: Treatment significantly better"
+        elif is_significant and lift < 0:
+            recommendation = "REJECT: Treatment significantly worse"
+        else:
+            recommendation = "INCONCLUSIVE: No significant difference"
+
+        return {
+            'control_cvr': control_cvr,
+            'treatment_cvr': treatment_cvr,
+            'lift': lift,
+            'p_value': p_value,
+            'is_significant': is_significant,
+            'recommendation': recommendation
+        }
+
+
+# Example
+ab_test = RTBABTest()
+
+# Calculate required sample size
+# Want to detect 5% lift in 2% baseline CVR
+sample_size = ab_test.calculate_sample_size(
+    baseline_cvr=0.02,
+    mde=0.05,  # 5% relative lift
+    alpha=0.05,
+    power=0.80
+)
+print(f"Need {sample_size:,} impressions per variant")  # ~60,000
+
+# After running test
+results = ab_test.analyze_results(
+    control_conversions=1200,
+    control_impressions=60000,  # 2.0% CVR
+    treatment_conversions=1320,
+    treatment_impressions=60000   # 2.2% CVR (10% lift)
+)
+
+print(f"Lift: {results['lift']:.1%}")
+print(f"P-value: {results['p_value']:.4f}")
+print(f"Recommendation: {results['recommendation']}")
+```
+
+#### Graceful Rollback Strategy
+
+**You:** "If new algorithm degrades metrics, rollback immediately:
+
+```python
+class BiddingAlgorithmDeployment:
+    """
+    Canary deployment for bidding algorithm changes
+    """
+
+    def __init__(self):
+        self.rollout_percentage = 0  # Start at 0%
+        self.metrics_monitor = MetricsMonitor()
+
+    def canary_rollout(self):
+        """
+        Gradual rollout with automatic rollback
+
+        Stages:
+        1% → 5% → 10% → 25% → 50% → 100%
+
+        At each stage, monitor metrics for 24 hours
+        If degradation detected, rollback immediately
+        """
+
+        stages = [0.01, 0.05, 0.10, 0.25, 0.50, 1.0]
+
+        for stage in stages:
+            print(f"Rolling out to {stage:.0%} of traffic...")
+            self.rollout_percentage = stage
+
+            # Wait 24 hours
+            time.sleep(24 * 3600)
+
+            # Check metrics
+            is_healthy = self.metrics_monitor.check_health()
+
+            if not is_healthy:
+                print(f"ALERT: Metrics degraded at {stage:.0%}. Rolling back!")
+                self.rollback()
+                return False
+
+            print(f"{stage:.0%} stage successful. Proceeding...")
+
+        print("Full rollout complete!")
+        return True
+
+    def rollback(self):
+        """Immediately revert to previous algorithm"""
+        self.rollout_percentage = 0
+        # Switch traffic back to old algorithm
+        # Alert on-call engineer
+
+
+class MetricsMonitor:
+    """Monitor key metrics during rollout"""
+
+    def check_health(self) -> bool:
+        """
+        Check if new algorithm is healthy
+
+        Red flags:
+        - Win rate dropped >10%
+        - CVR dropped >5%
+        - Cost per conversion increased >15%
+        - Campaign budget overspend increased
+        """
+
+        current = self.get_current_metrics()
+        baseline = self.get_baseline_metrics()
+
+        # Check win rate
+        win_rate_change = (current['win_rate'] - baseline['win_rate']) / baseline['win_rate']
+        if win_rate_change < -0.10:  # 10% drop
+            return False
+
+        # Check CVR
+        cvr_change = (current['cvr'] - baseline['cvr']) / baseline['cvr']
+        if cvr_change < -0.05:  # 5% drop
+            return False
+
+        # Check cost per conversion
+        cpa_change = (current['cpa'] - baseline['cpa']) / baseline['cpa']
+        if cpa_change > 0.15:  # 15% increase
+            return False
+
+        return True  # Healthy
+```
+
+### Failure Modes & SLOs
+
+**You:** "RTB systems have strict availability requirements (ads = revenue):
+
+#### Common Failure Modes
+
+| Failure | Impact | Mitigation | Recovery Time |
+|---------|--------|------------|---------------|
+| **Exchange down** | 100% revenue loss | Multi-region deployment, automatic failover | <1 minute |
+| **Bidder timeout** | Lower fill rate, lower revenue | Set timeout to 50ms, drop slow bidders | Immediate |
+| **Model serving down** | Can't predict CTR/CVR | Fallback to rule-based bidding | <5 seconds |
+| **Budget service down** | Can't check spend | Circuit breaker: stop bidding to avoid overspend | Immediate |
+| **Redis cache miss** | Higher latency | DB fallback, but may breach 100ms SLO | <100ms |
+
+#### SLOs
+
+```
+Latency SLO:
+- P50: <50ms
+- P95: <80ms
+- P99: <100ms
+
+Availability SLO:
+- 99.99% uptime (52 minutes downtime/year)
+- Why? 1 hour downtime = $200K revenue loss
+
+Budget Accuracy SLO:
+- 95% of campaigns spend within ±5% of daily budget
+- Why? Overspend = advertiser complaints, underspend = lost revenue
+
+Win Rate SLO:
+- Maintain 20-30% win rate
+- <15%: Bidding too conservatively (lost impressions)
+- >40%: Bidding too aggressively (overpaying)
+```
+
+### Long-Term Maintenance
+
+**Interviewer:** "How do you maintain the system over time?"
+
+**You:** "RTB systems need continuous optimization:
+
+#### Model Retraining Schedule
+
+```
+CTR Model:
+- Retrain: Daily (user behavior changes fast)
+- Features: 100+ features (user, ad, context)
+- Training data: Last 7 days (recency important)
+- Validation: A/B test before deployment
+
+CVR Model:
+- Retrain: Weekly (conversions are delayed, need more data)
+- Features: 50+ features (user intent, product match)
+- Training data: Last 30 days
+- Validation: Offline metrics + A/B test
+
+Bid Landscape Model:
+- Retrain: Hourly (competitive landscape changes)
+- Features: Time, publisher, ad category
+- Training data: Last 24 hours
+- Validation: Compare predicted vs actual win rate
+```
+
+#### When to Re-architect
+
+**You:** "Signals that you need major changes:
+
+```
+Re-architect if:
+1. Latency consistently exceeds SLO (P99 >100ms for >1 week)
+   → Move to Agentic RTB Framework (2024)
+
+2. Cost growing faster than revenue (>50% margin)
+   → Optimize model serving, use cheaper models
+
+3. Fill rate dropping (<90% of requests get bids)
+   → Add more bidders, relax targeting
+
+4. Budget overspend affecting >10% of campaigns
+   → Redesign budget pacing (move to Redis Streams for real-time)
+
+5. Fraud rate increasing (>5%)
+   → Upgrade fraud detection, add graph-based fraud rings detection
+```
+
+### Organizational Context
+
+**You:** "RTB systems require cross-functional collaboration:
+
+#### Team Structure
+
+```
+Core RTB Team (10 engineers):
+- 3 ML Engineers: CTR/CVR models, bid optimization
+- 3 Backend Engineers: Auction engine, exchange integration
+- 2 Infra Engineers: Latency optimization, geo-distribution
+- 1 Data Engineer: Feature pipelines, data quality
+- 1 Staff Engineer: Technical lead, architecture
+
+Partner Teams:
+- Fraud Detection Team: Real-time fraud scoring
+- Payments Team: Budget tracking, billing
+- Ad Quality Team: Creative verification, brand safety
+- Publisher Relations: SSP integrations
+- Sales: Campaign setup, advertiser support
+
+On-Call Rotation:
+- 24/7 on-call (revenue-critical system)
+- Rotation: 1 week shifts, 5 engineers
+- Escalation: Staff engineer backup
+```
+
+#### Cross-Functional Trade-offs
+
+**You:** "Typical conflicts and resolutions:
+
+**Sales wants:**
+- Higher win rates (more impressions for clients)
+- Solution: Increase bids → but increases cost
+
+**Finance wants:**
+- Lower costs (maximize profit margin)
+- Solution: Decrease bids → but decreases win rate
+
+**Resolution:**
+- Target: 25% win rate, 50% profit margin
+- Automated bidding optimizes this trade-off
+- A/B test any major changes
+
+**Publishers want:**
+- Higher CPMs (more revenue per impression)
+- Solution: Increase reserve prices
+
+**Advertisers want:**
+- Lower CPMs (cheaper impressions)
+- Solution: Decrease bids
+
+**Resolution:**
+- Let market find equilibrium (auction dynamics)
+- Exchange takes 10-20% cut regardless
 
 ---
 

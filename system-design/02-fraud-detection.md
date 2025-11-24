@@ -33,69 +33,202 @@ This guide simulates a real ML system design interview focused on real-time frau
 
 **You:** "Let me understand the scope and constraints:
 
-1. **Scale Questions:**
-   - How many transactions do we process per second?
-   - What percentage of transactions are fraudulent? (Class imbalance ratio)
-   - What's the average transaction value and variance?
+1. **Scale & Traffic Patterns:**
+   - How many transactions per second (TPS)? Peak vs average?
+   - What percentage of transactions are fraudulent? (class imbalance critical here)
+   - Geographic distribution? (fraud rates vary by region)
+   - Transaction value distribution? (median, p95, p99 amounts)
+   - What's the split: card-present vs card-not-present vs ACH/wire?
 
-2. **Latency Requirements:**
-   - What's the maximum acceptable latency for fraud detection?
-   - Do we block the transaction synchronously or flag async?
-   - Can we do multi-stage verification (instant + delayed review)?
+2. **Latency & Real-Time Requirements:**
+   - Maximum acceptable latency for fraud scoring? (p50, p95, p99)
+   - Synchronous (block transaction) or asynchronous (post-authorization review)?
+   - Can we do multi-stage verification? (instant check → 2FA → manual review)
+   - Batch processing acceptable for any use cases?
 
-3. **Business Constraints:**
-   - What's the cost of false positives (legitimate transaction blocked)?
-   - What's the cost of false negatives (fraud slips through)?
-   - Are there regulatory requirements (PCI-DSS, KYC)?
+3. **Business & Cost Constraints:**
+   - Cost of false positive (declined legitimate transaction)?
+     * Immediate revenue loss
+     * Customer lifetime value impact
+     * Customer service costs
+   - Cost of false negative (missed fraud)?
+     * Transaction amount loss
+     * Chargeback fees ($15-30 typical)
+     * Processor penalties
+   - What's the acceptable FP rate? (e.g., <5% of transactions flagged)
+   - Regulatory requirements? (PCI-DSS, KYC, AML, GDPR for EU)
 
-4. **Data Availability:**
-   - What data do we have about users? (transaction history, device info, location)
-   - Do we have real-time access to external signals? (IP reputation, device fingerprints)
-   - Historical fraud data available for training?
+4. **Data & Features:**
+   - User data: transaction history depth? (30 days, 90 days, lifetime?)
+   - Device fingerprinting available? (device ID, browser, OS)
+   - Behavioral biometrics? (typing patterns, mouse movements)
+   - External data sources? (IP reputation, email reputation, phone verification)
+   - Real-time velocity features? (transactions in last hour, unique merchants)
+   - Merchant risk profiles available?
 
-5. **Actions:**
-   - What actions can we take? (approve, decline, request 2FA, manual review)
-   - Can we use adaptive friction (ask for verification only when suspicious)?"
+5. **Actions & Friction:**
+   - What actions can system take? (approve, decline, 2FA, 3DS, manual review)
+   - Adaptive friction acceptable? (request verification only when suspicious)
+   - Can we decline partially? (approve smaller amount, decline large)
+   - Manual review SLA? (respond within 1 hour, 24 hours?)
+
+6. **Adversarial Considerations:**
+   - How quickly do fraudsters adapt? (daily, weekly, monthly model updates needed?)
+   - Fraud ring detection needed? (coordinated attacks, account takeover)
+   - Model explainability required? (regulatory compliance, customer disputes)
+   - Feedback loop: when do we learn about fraud? (instant, days later via chargebacks?)"
 
 ### Interviewer's Answers
 
-**Interviewer:** "Good questions! Here's the scope:
+**Interviewer:** "Excellent questions! Here's the detailed scope:
 
-- **Scale:** 100K transactions/second peak, 10M transactions/day
-- **Fraud Rate:** 0.2% of transactions (highly imbalanced - 1:500 ratio)
-- **Latency:** Must respond within 100ms (synchronous blocking)
-- **Costs:**
-  - False Positive: Loss of customer trust + transaction value ($100 avg)
-  - False Negative: Fraud loss ($500 avg) + chargeback fees ($50)
-- **Data:** User history, device info, IP, merchant info, transaction amount/type
-- **Actions:** Approve, Decline, Request 2FA (step-up authentication)
-- **Availability:** 99.99% (4 nines)"
+- **Scale & Volume:**
+  - Average: 30K TPS, Peak: 100K TPS (during holidays, Black Friday)
+  - Daily volume: 10M transactions/day
+  - Geographic: 60% US, 20% Europe, 15% Asia, 5% other
+  - Transaction types: 70% card-not-present (online), 20% card-present (POS), 10% ACH
 
-### Requirements Summary
+- **Fraud Characteristics:**
+  - Overall fraud rate: 0.2% (1 in 500 transactions)
+  - Fraud rate by type: CNP 0.4%, CP 0.05%, ACH 0.1%
+  - Highly imbalanced: 20,000 fraudulent transactions out of 10M daily
+  - Average fraud amount: $500, legitimate avg: $85
 
-**You:** "Perfect! Let me summarize:
+- **Transaction Value Distribution:**
+  - Median: $45
+  - p95: $300
+  - p99: $850
+  - Max single transaction: $10,000
+
+- **Latency Requirements:**
+  - Synchronous fraud check: p50 <50ms, p95 <100ms, p99 <150ms
+  - Timeout: 200ms (fallback to rule-based if ML times out)
+  - No batch processing - all real-time
+
+- **Cost Structure:**
+  - False Positive cost: $100-150 per incident
+    * Lost transaction revenue (2-3% processing fee)
+    * Customer service call ($20)
+    * Customer lifetime value impact ($80-130)
+  - False Negative cost: $550 per incident
+    * Transaction amount lost ($500 avg)
+    * Chargeback fee ($25)
+    * Processor penalty ($25)
+  - **Cost ratio: FN is 5.5x more expensive than FP**
+
+- **Acceptable Error Rates:**
+  - False Positive Rate target: <5% (max 500K declined legitimate/day)
+  - Recall (catch fraud) target: >90% (miss <10% of fraud)
+  - Precision target: >85% (85% of declined transactions are actual fraud)
+
+- **Data Available:**
+  - User: 90-day transaction history, email/phone verification status
+  - Device: Fingerprint, IP, browser, OS, geolocation (city-level)
+  - Transaction: Amount, merchant category code (MCC), time, shipping address
+  - External: IP reputation score, email domain age, device velocity (shared across users)
+  - Real-time: Transactions in last 1 hour, unique merchants visited
+
+- **Actions:**
+  - Approve (risk score <0.3)
+  - Request 2FA/3DS (risk score 0.3-0.7) - adds 20-30s latency
+  - Manual review queue (risk score 0.7-0.9) - reviewed within 1 hour
+  - Decline (risk score >0.9)
+
+- **Regulatory & Explainability:**
+  - PCI-DSS compliance required
+  - GDPR for EU customers (data retention limits, right to explanation)
+  - Must provide decline reasons to merchants
+  - Model decisions must be explainable (SHAP values acceptable)
+
+- **Adversarial Dynamics:**
+  - Fraudsters adapt within 1-2 weeks of new patterns
+  - Fraud rings coordinate 100s of accounts
+  - Account takeover attacks increasing 20% yearly
+  - Need daily model retraining
+  - Chargeback feedback arrives 30-90 days after transaction (delayed labels)
+
+- **Availability:** 99.99% (52.6 minutes downtime/year)"
+
+### Requirements Summary & Back-of-Envelope Calculations
+
+**You:** "Perfect! Let me summarize with quick calculations:
 
 #### Functional Requirements
-- Real-time fraud prediction within 100ms
-- Support approve/decline/2FA actions
-- Handle 100K TPS peak load
-- Multi-signal fraud detection (user, device, transaction, merchant)
+- Real-time fraud scoring within 100ms p95 (synchronous blocking)
+- Support risk-based actions: approve / 2FA / manual review / decline
+- Handle 100K TPS peak load with 99.99% availability
+- Multi-signal detection: user behavior, device fingerprint, transaction patterns, merchant risk
+- Explainable decisions (SHAP values for regulatory compliance)
+- Daily model retraining to adapt to evolving fraud patterns
 
-#### Non-Functional Requirements
-- **Scale:** 10M transactions/day, 100K TPS peak
-- **Latency:** <100ms p99 (synchronous)
-- **Availability:** 99.99% uptime
-- **Accuracy:** Minimize both false positives and false negatives
-  - Target: Recall >90% (catch 90% of fraud)
-  - Target: Precision >80% (80% of blocks are actual fraud)
+#### Non-Functional Requirements & Calculations
+
+**Scale:**
+- 10M transactions/day = 116 TPS average
+- Peak: 100K TPS (864× average during Black Friday)
+- Fraud volume: 10M × 0.2% = **20,000 fraudulent transactions/day**
+- Legitimate: 9.98M transactions/day
+
+**Class Imbalance:**
+- Fraud:Legitimate ratio = 1:500 (extreme imbalance)
+- Training data: Need oversampling/undersampling
+- If naive model predicts all "legitimate": 99.8% accuracy but useless!
+
+**Cost Analysis (per day):**
+- True Positives (fraud caught): 20,000 × 0.90 (90% recall) = 18,000 fraud prevented
+  - Value: 18,000 × $550 = **$9.9M fraud prevented**
+- False Negatives (fraud missed): 20,000 × 0.10 = 2,000 fraud slips through
+  - Cost: 2,000 × $550 = **$1.1M lost**
+- False Positives (legitimate declined): 9.98M × 0.05 (5% FPR) = 499,000
+  - Cost: 499,000 × $125 = **$62.4M** (HUGE cost if unchecked!)
+- **Target FP rate must be <1%** to keep costs reasonable
+
+**Optimized Thresholds:**
+- At precision 85%, FP rate = 15% of flagged transactions
+- If we flag 2% of all transactions (200K/day):
+  - True fraud: ~18,000 (90% of 20K)
+  - False alarms: ~32,000 (15% of 200K)
+  - FP cost: 32,000 × $125 = $4M/day (expensive but acceptable)
+
+**Latency Budget (100ms p95):**
+- Feature fetching: **20ms** (user history, device info from cache)
+- Real-time aggregations: **15ms** (velocity features from Druid)
+- Rule engine (30% of traffic): **5ms** (deterministic checks)
+- ML model inference (70% of traffic): **50ms** (XGBoost or NN)
+- Risk scoring & decision: **10ms** (threshold logic)
+- **Total: ~100ms**
+
+**Storage:**
+- User transaction history: 500M users × 90 days × 10 txns/day × 1KB = **450TB**
+- Real-time features: Redis cache (100GB for hot data)
+- Model artifacts: XGBoost ensemble (500MB) + embeddings (2GB) = 2.5GB
+
+**Compute (ML Inference):**
+- 10M predictions/day × 70% ML (7M, rest caught by rules) = 7M inferences/day
+- At 50ms per inference = 350,000 CPU-seconds/day = 97 CPU-hours/day
+- With GPU for GNN (fraud ring detection): 4 × A100 = $345/day
+- **Total compute: ~$1,500/day** (CPU + GPU)
+
+**Availability:**
+- Target: 99.99% = 52.6 minutes downtime/year
+- Error budget: 0.01% × 10M = **1,000 failed transactions/day**
+- Must have fallback to rule-based system
+
+#### Success Metrics
+- **Primary:** Recall ≥90% (catch ≥90% of fraud) + Precision ≥85%
+- **Business:** Fraud loss <0.1% of transaction volume (<$10M lost/year)
+- **Guardrails:** FP rate <1% (max 100K legitimate declined/day)
+- **Model Quality:** PR-AUC ≥0.85 (better than ROC-AUC for imbalanced data)
 
 #### Key Challenges
-- **Class Imbalance:** 0.2% fraud rate (1:500 imbalance)
-- **Cost Asymmetry:** FN cost ($550) > FP cost ($100)
-- **Real-time:** 100ms latency constraint
-- **Adversarial:** Fraudsters adapt to detection
+1. **Extreme Class Imbalance:** 1:500 ratio requires SMOTE/cost-sensitive learning
+2. **Cost Asymmetry:** FN 5.5× more expensive than FP → optimize threshold carefully
+3. **Latency:** 100ms with complex features → tiered architecture (rules → light ML → heavy ML)
+4. **Adversarial:** Fraudsters adapt weekly → daily retraining, drift detection
+5. **Delayed Labels:** Chargebacks arrive 30-90 days later → online learning challenges
+6. **Explainability:** Must explain declines → use SHAP, LIME, or rule extraction
 
-Does this look correct?"
+Does this capture everything?"
 
 **Interviewer:** "Yes, let's proceed with the design."
 
@@ -211,56 +344,249 @@ graph TB
 
 ### Walking Through the Architecture
 
-**You:** "Let me explain the real-time serving path with our 100ms budget:
+**You:** "Let me explain the end-to-end real-time flow with detailed latency breakdown:
 
-#### Latency Budget Breakdown
+#### Step 1: Transaction Arrives (0ms)
 
-```
-Total: 100ms (p99)
-
-1. API Gateway & Routing:       5ms
-2. Rule Engine (Fast Filter):   10ms
-3. Feature Engineering:          20ms
-   - Fetch user features:        5ms
-   - Fetch device features:      5ms
-   - Fetch merchant features:    5ms
-   - Compute real-time aggs:     5ms
-4. ML Model Ensemble:            50ms
-   - XGBoost inference:          20ms
-   - GNN inference:              15ms
-   - Neural Net inference:       15ms
-5. Decision Logic:               15ms
-Total:                           100ms
+```json
+POST /api/v1/fraud-check
+{
+  "transaction_id": "txn_abc123",
+  "user_id": "user_456",
+  "amount": 299.99,
+  "merchant_id": "merch_789",
+  "card_last4": "4242",
+  "device_id": "dev_xyz",
+  "ip_address": "203.0.113.42",
+  "timestamp": "2025-01-15T14:23:15Z"
+}
 ```
 
-#### Data Flow
+**Processing (5ms):**
+1. API Gateway validates request, authenticates - **2ms**
+2. Load balancer routes to Fraud Service pod (nearest AZ) - **1ms**
+3. Parse JSON, extract fields - **2ms**
 
-**Step 1: Rule Engine (10ms) - Fast Filter**
-- Block known bad actors (blacklisted IPs, cards, emails)
-- Block impossible scenarios (e.g., two transactions 1000 miles apart in 1 minute)
-- Catches ~30% of obvious fraud with zero ML cost
-- If rules trigger → Immediate decline
+#### Step 2: Rule Engine - Fast Filter (10ms)
 
-**Step 2: Feature Engineering (20ms)**
-- Fetch pre-computed features from Redis (user, device, merchant)
-- Compute real-time aggregations:
-  - User: Transactions in last 1 hour, 24 hours, 7 days
-  - Device: Unique users on this device in last hour
-  - Merchant: Fraud rate in last 24 hours
-  - Velocity: Transaction frequency, amount patterns
+**Deterministic checks (no ML needed):**
 
-**Step 3: ML Model Ensemble (50ms)**
-- **XGBoost (Primary):** Best for tabular features, handles imbalance well
-- **Graph Neural Network:** Detects fraud rings, shared device/IP patterns
-- **LSTM Neural Net:** Sequential patterns, user behavior modeling
+```python
+class RuleEngine:
+    """
+    Catches 30% of fraud with zero ML cost
+    All rules execute in <10ms
+    """
 
-**Step 4: Decision Engine (15ms)**
-- Ensemble score combination (weighted average)
-- Risk-based thresholds:
-  - Low risk (score < 0.3): Approve
-  - Medium risk (0.3-0.7): Request 2FA
-  - High risk (> 0.7): Decline
-- Cost-sensitive adjustment based on transaction amount"
+    def evaluate(self, txn: Transaction) -> RuleResult:
+        # Rule 1: Blacklist check (3ms - Redis lookup)
+        if self.is_blacklisted(txn.card_number, txn.ip, txn.email):
+            return RuleResult(decision='DECLINE', reason='blacklisted',
+                            confidence=1.0, latency_ms=3)
+
+        # Rule 2: Velocity limits (2ms - Redis counter check)
+        if self.exceeds_velocity(txn.user_id):
+            # >5 transactions in 5 minutes = suspicious
+            return RuleResult(decision='DECLINE', reason='velocity_exceeded',
+                            confidence=0.95, latency_ms=5)
+
+        # Rule 3: Impossible geography (2ms - calculation)
+        if self.impossible_geography(txn.user_id, txn.ip_location):
+            # Transaction 500 miles from last txn 10 mins ago
+            return RuleResult(decision='DECLINE', reason='impossible_travel',
+                            confidence=0.98, latency_ms=7)
+
+        # Rule 4: Amount threshold (1ms)
+        if txn.amount > 5000 and txn.user_account_age_days < 7:
+            # New account, large transaction
+            return RuleResult(decision='MANUAL_REVIEW', reason='new_high_value',
+                            confidence=0.7, latency_ms=8)
+
+        # Rule 5: Known good patterns (2ms)
+        if self.is_trusted_pattern(txn):
+            # Same merchant, similar amount, same device as last 10 txns
+            return RuleResult(decision='APPROVE', reason='trusted_pattern',
+                            confidence=0.9, latency_ms=10)
+
+        # No rules triggered → proceed to ML
+        return RuleResult(decision='CONTINUE_TO_ML', latency_ms=10)
+```
+
+**Impact:**
+- 30% of transactions decided by rules (3M/day out of 10M)
+- 7M transactions proceed to ML scoring
+- Saves significant ML compute cost
+
+#### Step 3: Feature Engineering (20ms)
+
+**Parallel feature fetching:**
+
+```python
+async def fetch_features(txn: Transaction) -> FeatureVector:
+    """
+    Fetch features in parallel from multiple sources
+    Total: 20ms (limited by slowest dependency)
+    """
+
+    # Launch all fetches in parallel
+    user_features_task = fetch_user_features(txn.user_id)      # 8ms
+    device_features_task = fetch_device_features(txn.device_id) # 6ms
+    merchant_features_task = fetch_merchant_features(txn.merchant_id) # 5ms
+    velocity_features_task = compute_velocity_features(txn)     # 12ms (slowest)
+
+    # Wait for all to complete (12ms - limited by velocity)
+    user_feat, device_feat, merchant_feat, velocity_feat = await asyncio.gather(
+        user_features_task,
+        device_features_task,
+        merchant_features_task,
+        velocity_features_task
+    )
+
+    # Combine into feature vector (2ms)
+    return combine_features(user_feat, device_feat, merchant_feat, velocity_feat)
+```
+
+**Feature breakdown (150 total features):**
+
+1. **User Features (40 features, 8ms from Redis):**
+   - Account age (days since creation)
+   - Email/phone verification status
+   - Historical transaction count (30d, 90d, lifetime)
+   - Average transaction amount
+   - Fraud history (past fraud count, disputes)
+   - Credit score (if available)
+
+2. **Device Features (30 features, 6ms from Redis):**
+   - Device fingerprint hash
+   - Device age (first seen timestamp)
+   - OS, browser, screen resolution
+   - Unique users on this device (fraud risk: device sharing)
+   - Geolocation (city, country)
+
+3. **Merchant Features (20 features, 5ms from Redis):**
+   - Merchant risk score (historical fraud rate)
+   - Merchant category code (MCC)
+   - Average ticket size
+   - Chargeback rate
+
+4. **Velocity Features (40 features, 12ms from Druid):**
+   ```sql
+   -- Real-time aggregations from Druid
+   SELECT
+       COUNT(*) as txn_count_1h,
+       SUM(amount) as amount_sum_1h,
+       COUNT(DISTINCT merchant_id) as unique_merchants_1h,
+       MAX(amount) as max_amount_1h
+   FROM transactions
+   WHERE user_id = ? AND timestamp > NOW() - INTERVAL '1 HOUR'
+   ```
+   - Transaction counts: 1h, 6h, 24h, 7d windows
+   - Amount statistics: sum, avg, max, std_dev
+   - Unique merchants: diversity of spending
+   - Geographic diversity: unique countries/cities
+
+5. **Transaction-Specific (20 features, computed inline <1ms):**
+   - Amount
+   - Time of day (hour, day of week)
+   - Amount deviation from user average
+   - Days since last transaction
+   - Shipping vs billing address match
+
+#### Step 4: ML Model Ensemble (50ms)
+
+**Three models run in parallel, then ensemble:**
+
+```python
+class FraudModelEnsemble:
+    def __init__(self):
+        self.xgboost = load_model('xgboost_v47.pkl')     # 200MB
+        self.gnn = load_model('gnn_fraud_rings_v12.pt')  # 50MB
+        self.lstm = load_model('lstm_sequence_v8.pt')    # 30MB
+
+    async def predict(self, features: FeatureVector) -> float:
+        # Run models in parallel
+        xgb_task = self.xgboost_predict(features)  # 20ms (CPU)
+        gnn_task = self.gnn_predict(features)      # 15ms (GPU)
+        lstm_task = self.lstm_predict(features)    # 15ms (GPU)
+
+        # Wait for all predictions (20ms - limited by XGBoost)
+        xgb_score, gnn_score, lstm_score = await asyncio.gather(
+            xgb_task, gnn_task, lstm_task
+        )
+
+        # Ensemble: weighted average (2ms)
+        final_score = (
+            0.6 * xgb_score +   # Primary model (most accurate)
+            0.25 * gnn_score +  # Fraud ring detection
+            0.15 * lstm_score   # Behavioral sequences
+        )
+
+        return final_score  # Risk score [0, 1]
+```
+
+**Model details:**
+- **XGBoost (20ms, CPU):** 500 trees, max_depth=6, 150 features
+- **GNN (15ms, GPU):** 3-layer GraphSAGE, detects fraud rings via shared devices/IPs
+- **LSTM (15ms, GPU):** 2-layer LSTM, 64 hidden units, last 10 transactions sequence
+
+#### Step 5: Decision Engine (15ms)
+
+```python
+class DecisionEngine:
+    def make_decision(self, risk_score: float, txn: Transaction) -> Decision:
+        """
+        Risk-based decision with cost-sensitivity
+        Adjusts thresholds based on transaction amount
+        """
+
+        # Base thresholds
+        approve_threshold = 0.3
+        stepup_threshold = 0.7
+
+        # Adjust for transaction amount (higher amount = more conservative)
+        if txn.amount > 1000:
+            approve_threshold = 0.2  # Stricter for large amounts
+            stepup_threshold = 0.5
+
+        # Make decision (3ms)
+        if risk_score < approve_threshold:
+            return Decision(action='APPROVE',
+                          risk_score=risk_score,
+                          reason='low_risk',
+                          latency_ms=3)
+
+        elif risk_score < stepup_threshold:
+            return Decision(action='REQUEST_2FA',
+                          risk_score=risk_score,
+                          reason='medium_risk',
+                          latency_ms=5)
+
+        else:
+            # Check if manual review queue has capacity (2ms)
+            if risk_score < 0.9 and self.manual_review_queue.has_capacity():
+                return Decision(action='MANUAL_REVIEW',
+                              risk_score=risk_score,
+                              reason='high_risk_reviewable',
+                              latency_ms=10)
+            else:
+                return Decision(action='DECLINE',
+                              risk_score=risk_score,
+                              reason='very_high_risk',
+                              latency_ms=12)
+```
+
+### Total Latency: 5ms + 10ms + 20ms + 50ms + 15ms = **100ms (p95)**
+
+**With p99 tail latency: ~150ms** due to:
+- Cache misses (user features not in Redis)
+- Network jitter (cross-AZ calls)
+- GC pauses in JVM/Python
+- Database slow queries
+
+**Timeout handling:**
+- Hard timeout: 200ms
+- If timeout → fallback to rule-based decision
+- Log timeout for investigation"
 
 **Interviewer:** "Interesting! Can you dive deeper into how you handle the class imbalance problem?"
 
@@ -1171,7 +1497,1363 @@ class FraudMetrics:
 
 ---
 
-## Summary & Key Takeaways
+## Phase 5: Production Metrics & Interview Best Practices
+
+### Real Production Metrics from Payment Companies (2025)
+
+**You:** "Let me share real-world metrics from fraud detection systems:
+
+#### Industry Benchmarks (Stripe, PayPal, Square)
+
+**Scale Metrics:**
+- Transaction volume: 10M-100M transactions/day
+- Fraud rate: 0.1%-0.5% (1-5 fraudulent per 1000 transactions)
+- Review queue: 5-10% of transactions flagged for manual review
+- Processing time: <100ms p99 for 100K TPS
+
+**Detection Performance:**
+- Precision: 90-95% (10% false positives acceptable)
+- Recall: 85-95% (catch 85-95% of fraud)
+- F1 Score: 0.90+ (balanced precision-recall)
+- PR-AUC: 0.85+ (better metric than ROC-AUC for imbalanced data)
+
+**Business Impact:**
+- False Positive Cost: $50-$150 per declined legitimate transaction (lost customer)
+- False Negative Cost: $300-$1000 per missed fraud (chargebacks + fees)
+- Total fraud losses: <0.1% of transaction volume (industry target)
+- Cost savings from ML: 40-60% reduction vs rule-based systems
+
+**SLI/SLO Targets:**
+- Availability: 99.99% (52.6 minutes downtime/year)
+- Latency p99: <100ms for fraud scoring
+- Model freshness: Retrained daily with new fraud patterns
+- Feature freshness: Real-time velocity features updated every second
+
+### Cost Analysis
+
+**Infrastructure Costs (at 10M transactions/day):**
+
+**ML Model Serving:**
+- GPU inference: ~$500-1,000/day
+  - Uses CPU for most requests (XGBoost efficient)
+  - GPU for GNN fraud ring detection: ~4 H100 instances = $345/day
+  - Total: ~$1,000/day
+
+**Feature Store & Caching:**
+- Redis cluster (100GB): ~$200/day for velocity features
+- PostgreSQL (user/merchant data): ~$300/day
+- Real-time aggregations (Druid): ~$400/day
+
+**Data Pipeline:**
+- Kafka streams: ~$150/day
+- Spark for feature engineering: ~$200/day
+
+**Total Infrastructure: ~$2,250/day = $68K/month**
+
+**ROI Calculation:**
+- Monthly fraud prevented: $10M × 0.3% × 90% = $27,000
+- ML infrastructure cost: $68,000/month
+- Negative ROI from tech alone, BUT:
+  - Reduces manual review workload: Saves $200K/month (reviewers)
+  - Improves customer experience: Reduces false positives by 50%
+  - Net positive ROI: $150K/month benefit
+
+### Failure Scenarios & Mitigations
+
+**Interviewer:** "What if the ML model server fails?"
+
+**You:** "Multi-layer fallback strategy:
+
+#### Failure Scenario 1: ML Model Unavailable
+
+```python
+class FraudDetectionService:
+    def check_transaction(self, txn):
+        # Layer 1: Try ML model
+        try:
+            risk_score = self.ml_model.predict(txn)
+            return self.make_decision(risk_score, source='ml')
+        except ModelServerException:
+            logger.error("ML model unavailable, falling back to rules")
+
+        # Layer 2: Rule-based fallback
+        try:
+            risk_score = self.rule_engine.evaluate(txn)
+            return self.make_decision(risk_score, source='rules')
+        except Exception:
+            logger.critical("Rule engine also failed, using safe default")
+
+        # Layer 3: Safe default (approve low amounts, decline high)
+        if txn.amount < 100:
+            return {'decision': 'approve', 'reason': 'fallback_low_amount'}
+        else:
+            return {'decision': 'review', 'reason': 'fallback_manual_review'}
+```
+
+**Impact:** 30% of fraud already caught by rules, so degradation is partial.
+
+#### Failure Scenario 2: Feature Store Lag
+
+**Problem:** Real-time velocity features delayed (e.g., Kafka lag)
+
+**Detection:**
+```python
+def check_feature_freshness(features):
+    feature_timestamp = features['computed_at']
+    age_seconds = (time.time() - feature_timestamp)
+
+    if age_seconds > 60:  # Features older than 1 minute
+        logger.warn(f"Stale features: {age_seconds}s old")
+        return 'STALE'
+    return 'FRESH'
+```
+
+**Mitigation:**
+- Use cached features (5 minutes old) if real-time unavailable
+- Lower confidence in predictions with stale features
+- Increase manual review threshold
+
+#### Failure Scenario 3: Adversarial Attacks
+
+**Attack 1: Feature Manipulation**
+- Fraudsters learn model features and craft evasive transactions
+- Example: Split $1000 transaction into 10× $100 to avoid velocity triggers
+
+**Defense:**
+```python
+class AdversarialDefense:
+    def detect_evasion(self, user_id):
+        """Detect coordinated small transactions (splitting)"""
+
+        recent_txns = self.get_transactions(user_id, last_minutes=30)
+
+        # Check for suspicious patterns
+        if len(recent_txns) > 5 and all(t.amount < 200 for t in recent_txns):
+            total_amount = sum(t.amount for t in recent_txns)
+
+            if total_amount > 500:
+                # Suspicious: Many small transactions adding up
+                return {
+                    'evasion_detected': True,
+                    'pattern': 'transaction_splitting',
+                    'combined_amount': total_amount
+                }
+
+        return {'evasion_detected': False}
+```
+
+**Attack 2: Model Poisoning**
+- Fraudsters create many "legitimate-looking" fraudulent transactions
+- Goal: Poison training data to make future fraud undetectable
+
+**Defense:**
+- Human verification of labeled fraud (don't auto-label)
+- Anomaly detection on training data distribution
+- Ensemble models trained on different data slices
+
+### Interview Success Tips for Fraud Detection
+
+#### Mistake 1: Ignoring Class Imbalance
+**Bad:** "We'll train a neural network to classify fraud"
+**Good:** "Given 0.2% fraud rate (500:1 imbalance), I'll use SMOTE + cost-sensitive learning + ensemble methods"
+
+#### Mistake 2: Optimizing for Accuracy
+**Bad:** "We achieve 99.8% accuracy"
+**Good:** "Accuracy is misleading with imbalance. I'll optimize for Precision-Recall AUC and minimize business cost (FP=$100, FN=$550)"
+
+#### Mistake 3: Not Discussing Adversarial Nature
+**Bad:** "Once we train the model, we're done"
+**Good:** "Fraudsters adapt constantly. I'll implement: 1) Daily retraining, 2) Drift detection, 3) Adversarial pattern recognition, 4) Human-in-the-loop feedback"
+
+#### Mistake 4: Missing the Business Context
+**Bad:** "We'll block all suspicious transactions"
+**Good:** "Blocking legitimate transactions costs $100 in customer lifetime value. I'll optimize for a precision target of 95% (5% FP rate) to balance security and customer experience"
+
+#### Mistake 5: Ignoring Latency for Real-Time Systems
+**Bad:** "We'll use a large ensemble with 50 models"
+**Good:** "With 100ms budget at 100K TPS, I'll use: 1) Tiered decisions (rules first), 2) Model quantization, 3) Feature caching (95% hit rate), 4) Async feature computation"
+
+### What Strong Candidates Discuss
+
+**Beyond the basics, mention:**
+
+1. **Explainability for Compliance**
+   - SHAP values for model decisions
+   - Regulatory requirements (PSD2, GDPR)
+   - Audit trails for declined transactions
+
+2. **Feedback Loops**
+   - Chargebacks arrive 30-90 days later
+   - How to incorporate delayed labels
+   - Online learning vs batch retraining
+
+3. **Geographic Fraud Patterns**
+   - Fraud rates vary by country (0.1% US vs 2% some regions)
+   - Different model thresholds per region
+   - Cross-border transaction risks
+
+4. **Merchant Risk Profiles**
+   - High-risk merchants (crypto, gambling)
+   - MCC codes (Merchant Category Codes)
+   - First-time merchants with no history
+
+### Follow-Up Questions You Should Be Ready For
+
+**Q1:** "How do you handle concept drift in fraud detection?"
+**A:** Monitor model performance daily. If precision drops >5% or recall drops >10%, trigger retraining. Use Jensen-Shannon divergence to detect feature distribution shifts.
+
+**Q2:** "What if fraudsters reverse engineer your model?"
+**A:** Model obscurity isn't security. Assume adversarial knowledge. Use: 1) Ensemble of diverse models, 2) Random feature subsampling, 3) Moving decision thresholds, 4) Honeypot features.
+
+**Q3:** "How do you prevent bias (e.g., declining legitimate transactions from certain demographics)?"
+**A:** Fairness metrics (demographic parity, equal opportunity). Test precision/recall per demographic group. Never use protected attributes directly; audit proxy features (zip code → race).
+
+**Q4:** "How do you scale to 1M TPS?"
+**A:** 1) Shard by user_id, 2) Stateless model servers, 3) Feature caching, 4) Async processing for non-critical features, 5) Horizontal scaling behind load balancer.
+
+---
+
+## Staff-Level Deep Dives
+
+### 1. Adversarial ML & Model Poisoning Defense
+
+**Interviewer:** "Fraudsters actively try to reverse engineer your model and poison your training data. How do you defend against adversarial attacks?"
+
+**You:** "Excellent question! Fraud detection is one of the most adversarial ML problems. Let me explain our multi-layered defense:
+
+#### Attack Vector 1: Model Reverse Engineering
+
+**Attack:** Fraudsters make thousands of test transactions to probe model boundaries and learn decision thresholds.
+
+```python
+class AdversarialDefense:
+    """
+    Defend against model reverse engineering
+
+    Key principle: Assume adversary has full model knowledge
+    Don't rely on obscurity
+    """
+
+    def __init__(self):
+        self.ensemble_models = [
+            XGBoostModel(),
+            LightGBMModel(),
+            NeuralNetwork(),
+            RandomForest()
+        ]
+        self.feature_subsampling_rate = 0.8
+        self.threshold_variance = 0.05
+
+    def predict_with_defense(self, transaction):
+        """
+        Multi-layered adversarial defense
+
+        Defenses:
+        1. Model ensemble (harder to reverse 4 models than 1)
+        2. Random feature subsampling
+        3. Threshold randomization
+        4. Honeypot features
+        """
+
+        # Defense 1: Random feature subsampling
+        # Different transactions use different feature subsets
+        # Makes boundary probing ineffective
+        features = self.extract_features(transaction)
+        feature_subset = self.random_feature_subsample(
+            features,
+            rate=self.feature_subsampling_rate
+        )
+
+        # Defense 2: Model ensemble with voting
+        # Even if attacker learns one model, ensemble is robust
+        predictions = []
+        for model in self.ensemble_models:
+            pred = model.predict(feature_subset)
+            predictions.append(pred)
+
+        # Weighted voting (models have different weights)
+        ensemble_score = self.weighted_vote(predictions)
+
+        # Defense 3: Dynamic threshold randomization
+        # Threshold varies slightly per transaction
+        # Prevents exact boundary mapping
+        base_threshold = 0.7
+        randomized_threshold = base_threshold + random.uniform(
+            -self.threshold_variance,
+            self.threshold_variance
+        )
+
+        # Defense 4: Honeypot features
+        # Features that legitimate users never trigger
+        # But fraudsters probing might accidentally trigger
+        if self.check_honeypot_triggered(transaction):
+            # Suspicious behavior detected
+            ensemble_score = max(ensemble_score, 0.95)
+
+        decision = 'DECLINE' if ensemble_score > randomized_threshold else 'APPROVE'
+
+        return {
+            'decision': decision,
+            'score': ensemble_score,
+            'threshold': randomized_threshold  # Don't log this in production!
+        }
+
+    def random_feature_subsample(self, features, rate=0.8):
+        """
+        Randomly drop 20% of features
+
+        Why this works:
+        - Attacker can't probe all feature combinations
+        - Decision boundary becomes fuzzy
+        - Probing transactions get inconsistent results
+        """
+        import random
+
+        feature_names = list(features.keys())
+        keep_count = int(len(feature_names) * rate)
+
+        # Deterministic random (same transaction_id gets same subset)
+        # But attacker doesn't know the seed
+        random.seed(hash(features['transaction_id']) % 1000000)
+        selected_features = random.sample(feature_names, keep_count)
+
+        return {k: v for k, v in features.items() if k in selected_features}
+
+    def check_honeypot_triggered(self, transaction):
+        """
+        Honeypot features: Detect adversarial probing
+
+        Examples:
+        - User-Agent strings that match known testing tools
+        - Sequential transaction IDs (automated testing)
+        - Perfectly round amounts ($100.00, $500.00 - real users are messier)
+        - Transactions exactly at decision boundaries
+        - Multiple failed auth attempts followed by success
+        """
+
+        honeypots = []
+
+        # Honeypot 1: Suspicious user agent
+        if 'curl' in transaction.user_agent.lower() or 'python' in transaction.user_agent.lower():
+            honeypots.append('suspicious_user_agent')
+
+        # Honeypot 2: Round amounts (fraudsters test boundaries)
+        if transaction.amount % 100 == 0 and transaction.amount >= 100:
+            honeypots.append('round_amount')
+
+        # Honeypot 3: Sequential probing pattern
+        # Check if user made 10+ transactions in 1 minute
+        recent_txn_count = self.get_recent_transaction_count(
+            transaction.user_id,
+            window_seconds=60
+        )
+        if recent_txn_count > 10:
+            honeypots.append('rapid_fire_testing')
+
+        # Honeypot 4: Boundary probing
+        # Transactions at exactly $99, $199, $299, etc.
+        if transaction.amount in [99, 199, 299, 499, 999]:
+            honeypots.append('boundary_probing')
+
+        return len(honeypots) >= 2  # Multiple honeypots = likely adversarial
+```
+
+#### Attack Vector 2: Training Data Poisoning
+
+**Attack:** Fraudsters create thousands of "legitimate-looking" fraudulent transactions to poison training data.
+
+```python
+class DataPoisoningDefense:
+    """
+    Defend against training data poisoning
+
+    Attack scenario:
+    - Fraudster makes 1000 small fraudulent transactions ($5-10)
+    - None get reported as fraud (too small to notice)
+    - Model learns these patterns as "safe"
+    - Later, fraudster scales up to $500 transactions with same pattern
+    """
+
+    def clean_training_data(self, transactions, labels):
+        """
+        Detect and remove poisoned training samples
+
+        Techniques:
+        1. Outlier detection in feature space
+        2. Clustering-based anomaly detection
+        3. Influence function analysis
+        4. Ensemble disagreement detection
+        """
+
+        # Step 1: Detect samples that cause high model disagreement
+        # If ensemble models disagree strongly, sample might be poisoned
+        ensemble_predictions = self.get_ensemble_predictions(transactions)
+        disagreement_scores = self.compute_disagreement(ensemble_predictions)
+
+        # Step 2: Influence function analysis
+        # Which training samples have highest influence on model?
+        # Poisoned samples often have abnormally high influence
+        influence_scores = self.compute_influence_scores(transactions, labels)
+
+        # Step 3: Remove suspected poisoned samples
+        clean_indices = []
+        for i, (txn, label) in enumerate(zip(transactions, labels)):
+            # Remove if:
+            # - High ensemble disagreement
+            # - High influence score
+            # - Suspicious patterns (small frauds that weren't reported)
+
+            is_suspicious = (
+                disagreement_scores[i] > 0.7 or
+                influence_scores[i] > 0.9 or
+                self.is_suspicious_pattern(txn, label)
+            )
+
+            if not is_suspicious:
+                clean_indices.append(i)
+
+        # Return cleaned dataset
+        clean_transactions = [transactions[i] for i in clean_indices]
+        clean_labels = [labels[i] for i in clean_indices]
+
+        print(f"Removed {len(transactions) - len(clean_transactions)} suspected poisoned samples")
+
+        return clean_transactions, clean_labels
+
+    def is_suspicious_pattern(self, txn, label):
+        """
+        Detect suspicious patterns in training data
+
+        Red flags:
+        - Label says "legitimate" but amount is very high for user
+        - Label says "legitimate" but from high-risk merchant
+        - Label says "legitimate" but device/IP never seen before
+        """
+
+        # Suspicious pattern 1: High-value transaction labeled "safe"
+        if label == 0 and txn.amount > 3 * txn.user_avg_amount:
+            return True
+
+        # Suspicious pattern 2: First transaction from new device labeled "safe"
+        if label == 0 and txn.is_new_device and txn.amount > 100:
+            return True
+
+        # Suspicious pattern 3: High-risk merchant labeled "safe"
+        if label == 0 and txn.merchant_risk_score > 0.8:
+            return True
+
+        return False
+
+    def compute_influence_scores(self, transactions, labels):
+        """
+        Influence function: Which samples have most impact on model?
+
+        If removing a sample drastically changes model behavior,
+        it might be a poisoned sample
+        """
+
+        from sklearn.inspection import permutation_importance
+
+        # Train model on full dataset
+        model = self.train_model(transactions, labels)
+        base_accuracy = self.evaluate(model, self.validation_set)
+
+        influence_scores = []
+
+        for i in range(len(transactions)):
+            # Leave-one-out: Remove sample i and retrain
+            txn_subset = [t for j, t in enumerate(transactions) if j != i]
+            label_subset = [l for j, l in enumerate(labels) if j != i]
+
+            model_without_i = self.train_model(txn_subset, label_subset)
+            accuracy_without_i = self.evaluate(model_without_i, self.validation_set)
+
+            # If accuracy improves without this sample, it's likely poisoned
+            influence = base_accuracy - accuracy_without_i
+            influence_scores.append(influence)
+
+        return influence_scores
+```
+
+#### Attack Vector 3: Evasion Attacks
+
+**Attack:** Fraudsters slightly modify transactions to evade detection while still committing fraud.
+
+```python
+class EvasionDefense:
+    """
+    Defend against evasion attacks
+
+    Attack: Fraudster modifies transaction to slip under detection threshold
+    Example: Split $1000 fraud into 10 × $100 transactions
+    """
+
+    def detect_evasion_patterns(self, user_transactions):
+        """
+        Detect common evasion tactics
+
+        Evasion tactics:
+        1. Amount splitting (structuring)
+        2. Time spreading (avoid velocity triggers)
+        3. Device hopping (avoid device-based rules)
+        4. Merchant diversity (avoid merchant-based patterns)
+        """
+
+        evasion_signals = {}
+
+        # Evasion tactic 1: Amount structuring
+        # Multiple transactions just below flagging threshold
+        suspicious_amounts = [
+            txn.amount for txn in user_transactions
+            if 90 <= txn.amount <= 110  # Just below $100 threshold
+        ]
+
+        if len(suspicious_amounts) >= 5:
+            evasion_signals['amount_structuring'] = {
+                'count': len(suspicious_amounts),
+                'total': sum(suspicious_amounts),
+                'suspicion_score': 0.8
+            }
+
+        # Evasion tactic 2: Time spreading
+        # Exactly one transaction per hour for 10 hours
+        # (avoiding "5 transactions in 1 hour" velocity rule)
+        time_gaps = self.compute_time_gaps(user_transactions)
+        if self.is_suspiciously_regular(time_gaps):
+            evasion_signals['time_spreading'] = {
+                'avg_gap_minutes': np.mean(time_gaps),
+                'std_gap_minutes': np.std(time_gaps),
+                'suspicion_score': 0.7
+            }
+
+        # Evasion tactic 3: Device rotation
+        # Using multiple devices to avoid "new device" flag
+        device_count = len(set(txn.device_id for txn in user_transactions))
+        if device_count >= 5 and len(user_transactions) <= 10:
+            evasion_signals['device_hopping'] = {
+                'device_count': device_count,
+                'transaction_count': len(user_transactions),
+                'suspicion_score': 0.9
+            }
+
+        return evasion_signals
+
+    def is_suspiciously_regular(self, time_gaps):
+        """
+        Detect suspiciously regular timing patterns
+
+        Real users: Irregular timing (5min, 3hr, 10min, 1day)
+        Bots: Regular timing (exactly 1hr, 1hr, 1hr, 1hr)
+        """
+
+        # Low variance in timing = suspicious
+        std_dev = np.std(time_gaps)
+        mean_gap = np.mean(time_gaps)
+
+        coefficient_of_variation = std_dev / mean_gap
+
+        # If timing is too regular (CV < 0.2), suspicious
+        return coefficient_of_variation < 0.2
+```
+
+### 2. Online Learning with Delayed Labels (30-90 Day Chargeback Problem)
+
+**Interviewer:** "Chargebacks arrive 30-90 days after the transaction. How do you handle this massive label delay?"
+
+**You:** "This is one of the hardest problems in fraud detection! Let me explain our approach:
+
+#### The Problem
+
+```
+Day 0: Transaction happens → Model predicts (fraud or legitimate)
+Day 30-90: Chargeback arrives → True label revealed
+
+Challenge:
+- Can't wait 90 days to retrain model
+- Fraudsters evolve in days, not months
+- Need to learn from recent patterns
+```
+
+#### Solution: Multi-Stage Learning Pipeline
+
+```python
+class DelayedLabelLearning:
+    """
+    Handle 30-90 day label delay in fraud detection
+
+    Strategy:
+    1. Immediate feedback: Use proxy labels (declined transactions, 2FA required)
+    2. Short-term feedback: Confirmed fraud (user reports, merchant reports)
+    3. Long-term feedback: Chargebacks (ground truth)
+
+    Timeline:
+    - Day 0: Transaction → Use last model
+    - Day 1: Retrain with proxy labels (2FA success rate, declines)
+    - Day 7: Retrain with early fraud reports
+    - Day 30-90: Retrain with chargeback data (ground truth)
+    """
+
+    def __init__(self):
+        self.proxy_label_model = ProxyLabelModel()
+        self.short_term_model = ShortTermModel()
+        self.long_term_model = LongTermModel()
+
+    def generate_proxy_labels(self, transactions):
+        """
+        Day 1: Generate proxy labels without waiting for chargebacks
+
+        Proxy labels (immediate feedback):
+        1. 2FA required → likely fraud (70% precision)
+        2. Manual review flagged → likely fraud (80% precision)
+        3. User passed 2FA → likely legitimate (95% precision)
+        4. High-risk merchant declined → likely fraud (60% precision)
+        5. Multiple velocity triggers → likely fraud (75% precision)
+        """
+
+        proxy_labels = []
+
+        for txn in transactions:
+            # Proxy label logic
+            fraud_score = 0.0
+
+            # Signal 1: 2FA was required
+            if txn.required_2fa:
+                if txn.passed_2fa:
+                    fraud_score = 0.2  # Passed auth, likely legit
+                else:
+                    fraud_score = 0.9  # Failed auth, likely fraud
+
+            # Signal 2: Manual review decision
+            if txn.manual_review_decision == 'FRAUD':
+                fraud_score = max(fraud_score, 0.85)
+            elif txn.manual_review_decision == 'LEGITIMATE':
+                fraud_score = min(fraud_score, 0.15)
+
+            # Signal 3: Velocity triggers
+            if txn.velocity_triggers >= 3:
+                fraud_score = max(fraud_score, 0.75)
+
+            # Signal 4: User reported fraud (within 24 hours)
+            if txn.user_reported_fraud:
+                fraud_score = 1.0  # Definite fraud
+
+            # Signal 5: Device risk
+            if txn.device_risk_score > 0.9:
+                fraud_score = max(fraud_score, 0.8)
+
+            proxy_labels.append({
+                'transaction_id': txn.id,
+                'proxy_fraud_score': fraud_score,
+                'confidence': self.estimate_proxy_confidence(txn),
+                'true_label': None  # Will be filled later when chargeback arrives
+            })
+
+        return proxy_labels
+
+    def confidence_weighted_training(self, transactions, proxy_labels, label_confidence):
+        """
+        Train model with confidence-weighted samples
+
+        Idea:
+        - Proxy labels are noisy (70-95% precision)
+        - Weight samples by confidence
+        - High-confidence proxy labels get more weight
+        """
+
+        from xgboost import XGBClassifier
+
+        # Prepare features
+        X = self.extract_features(transactions)
+
+        # Prepare labels (0 or 1)
+        y = [1 if score > 0.5 else 0 for score in proxy_labels]
+
+        # Sample weights = confidence scores
+        sample_weights = label_confidence
+
+        # Train with sample weights
+        model = XGBClassifier(
+            scale_pos_weight=500,  # Class imbalance
+            max_depth=6,
+            n_estimators=100
+        )
+
+        model.fit(X, y, sample_weight=sample_weights)
+
+        return model
+
+    def progressive_label_refinement(self, transactions):
+        """
+        Progressively refine labels as more feedback arrives
+
+        Timeline:
+        - Day 0: Proxy labels (70-95% accuracy)
+        - Day 7: Early fraud reports (85% accuracy)
+        - Day 30: Initial chargebacks (95% accuracy)
+        - Day 90: Final chargebacks (99% accuracy)
+        """
+
+        # Stage 1: Day 0-7 (Proxy labels)
+        proxy_labels = self.generate_proxy_labels(transactions)
+        model_v1 = self.train_model(transactions, proxy_labels, confidence='low')
+
+        # Stage 2: Day 7-30 (Early fraud reports)
+        # Some users report fraud early
+        early_reports = self.fetch_early_fraud_reports(transactions)
+        refined_labels = self.merge_labels(proxy_labels, early_reports, priority='early_reports')
+        model_v2 = self.train_model(transactions, refined_labels, confidence='medium')
+
+        # Stage 3: Day 30-90 (Chargebacks arrive)
+        chargebacks = self.fetch_chargebacks(transactions)
+        final_labels = self.merge_labels(refined_labels, chargebacks, priority='chargebacks')
+        model_v3 = self.train_model(transactions, final_labels, confidence='high')
+
+        return {
+            'day_1_model': model_v1,
+            'day_7_model': model_v2,
+            'day_30_model': model_v3
+        }
+
+    def online_learning_with_delayed_labels(self):
+        """
+        Online learning: Update model daily with best available labels
+
+        Production strategy:
+        - Retrain daily with proxy labels (immediate feedback)
+        - Retrain weekly with early reports (7-day feedback)
+        - Retrain monthly with chargebacks (30-90 day feedback)
+        - Keep 3 models in production (ensemble)
+        """
+
+        # Daily retraining
+        today_transactions = self.fetch_transactions(days_ago=0)
+        proxy_labels = self.generate_proxy_labels(today_transactions)
+
+        # Fetch older transactions that now have true labels
+        week_old_transactions = self.fetch_transactions(days_ago=7)
+        week_old_labels = self.fetch_fraud_reports(days_ago=7)
+
+        month_old_transactions = self.fetch_transactions(days_ago=30)
+        month_old_labels = self.fetch_chargebacks(days_ago=30)
+
+        # Combine all data
+        all_transactions = today_transactions + week_old_transactions + month_old_transactions
+        all_labels = proxy_labels + week_old_labels + month_old_labels
+
+        # Train model with mixed-quality labels
+        model = self.confidence_weighted_training(
+            all_transactions,
+            all_labels,
+            label_confidence=self.estimate_all_confidences(all_labels)
+        )
+
+        return model
+```
+
+#### Importance Weighting for Label Shift
+
+```python
+class ImportanceWeightedLearning:
+    """
+    Handle distribution shift between training and serving
+
+    Problem:
+    - Training data: Transactions from 30-90 days ago (old fraud patterns)
+    - Serving data: Transactions today (new fraud patterns)
+    - Distribution has shifted!
+
+    Solution: Importance weighting
+    - Upweight recent patterns
+    - Downweight old patterns
+    """
+
+    def compute_importance_weights(self, transactions, labels):
+        """
+        Compute importance weights for each training sample
+
+        Weight = P(transaction at serving time) / P(transaction at training time)
+
+        Approximation:
+        - Recent transactions (last 7 days): weight = 2.0
+        - Medium age (8-30 days): weight = 1.0
+        - Old transactions (30-90 days): weight = 0.5
+        """
+
+        import datetime
+
+        weights = []
+        today = datetime.datetime.now()
+
+        for txn in transactions:
+            age_days = (today - txn.timestamp).days
+
+            if age_days <= 7:
+                weight = 2.0  # Recent patterns, high weight
+            elif age_days <= 30:
+                weight = 1.0  # Medium age, normal weight
+            else:
+                weight = 0.5  # Old patterns, low weight
+
+            weights.append(weight)
+
+        return weights
+
+    def train_with_importance_weighting(self, transactions, labels):
+        """
+        Train model with importance weights
+        """
+
+        X = self.extract_features(transactions)
+        y = labels
+
+        # Compute importance weights (recency-based)
+        importance_weights = self.compute_importance_weights(transactions, labels)
+
+        # Also apply confidence weights (label quality)
+        confidence_weights = self.estimate_label_confidence(transactions, labels)
+
+        # Combined weights
+        final_weights = [
+            imp * conf
+            for imp, conf in zip(importance_weights, confidence_weights)
+        ]
+
+        # Train with combined weights
+        model = XGBClassifier()
+        model.fit(X, y, sample_weight=final_weights)
+
+        return model
+```
+
+### 3. Fairness Evaluation & Bias Prevention
+
+**Interviewer:** "How do you ensure your fraud detection model doesn't discriminate against certain demographic groups?"
+
+**You:** "Fairness is critical in fraud detection. Regulatory requirements and ethical obligations demand fair treatment. Here's our approach:
+
+#### Fairness Metrics
+
+```python
+class FairnessEvaluator:
+    """
+    Evaluate model fairness across demographic groups
+
+    Protected attributes (cannot use directly):
+    - Race
+    - Gender
+    - Age
+    - National origin
+    - Religion
+
+    Proxy features (can indirectly encode protected attributes):
+    - ZIP code → Race (redlining)
+    - First name → Gender
+    - Shopping patterns → Religion
+    - IP geolocation → National origin
+    """
+
+    def evaluate_fairness(self, model, test_data, protected_attribute='race'):
+        """
+        Measure fairness metrics
+
+        Key metrics:
+        1. Demographic Parity: P(decline | group A) ≈ P(decline | group B)
+        2. Equal Opportunity: P(detect fraud | fraud=true, group A) ≈ P(detect fraud | fraud=true, group B)
+        3. Equalized Odds: Both TPR and FPR are equal across groups
+        4. Calibration: P(fraud | score=0.9, group A) ≈ P(fraud | score=0.9, group B)
+        """
+
+        groups = test_data[protected_attribute].unique()
+        fairness_report = {}
+
+        for group in groups:
+            group_data = test_data[test_data[protected_attribute] == group]
+
+            predictions = model.predict(group_data)
+            true_labels = group_data['is_fraud']
+
+            # Metric 1: Decline rate (Demographic Parity)
+            decline_rate = (predictions == 1).mean()
+
+            # Metric 2: True Positive Rate (Equal Opportunity)
+            fraud_cases = group_data[group_data['is_fraud'] == 1]
+            fraud_predictions = model.predict(fraud_cases)
+            tpr = (fraud_predictions == 1).mean()
+
+            # Metric 3: False Positive Rate
+            legit_cases = group_data[group_data['is_fraud'] == 0]
+            legit_predictions = model.predict(legit_cases)
+            fpr = (legit_predictions == 1).mean()
+
+            # Metric 4: Precision
+            if predictions.sum() > 0:
+                precision = (
+                    (predictions == 1) & (true_labels == 1)
+                ).sum() / predictions.sum()
+            else:
+                precision = 0.0
+
+            fairness_report[group] = {
+                'decline_rate': decline_rate,
+                'tpr': tpr,
+                'fpr': fpr,
+                'precision': precision,
+                'sample_size': len(group_data)
+            }
+
+        # Check for fairness violations
+        violations = self.detect_fairness_violations(fairness_report)
+
+        return fairness_report, violations
+
+    def detect_fairness_violations(self, fairness_report):
+        """
+        Flag fairness violations
+
+        Thresholds (industry standard):
+        - Decline rate difference: <10% (adverse impact ratio > 0.8)
+        - TPR difference: <5%
+        - FPR difference: <5%
+        """
+
+        violations = []
+
+        # Get reference group (majority group)
+        reference_group = max(
+            fairness_report.keys(),
+            key=lambda g: fairness_report[g]['sample_size']
+        )
+
+        ref_metrics = fairness_report[reference_group]
+
+        # Check each protected group
+        for group, metrics in fairness_report.items():
+            if group == reference_group:
+                continue
+
+            # Violation 1: Adverse impact (4/5 rule)
+            # Decline rate for protected group should be >= 0.8 × decline rate for majority
+            adverse_impact_ratio = metrics['decline_rate'] / ref_metrics['decline_rate']
+            if adverse_impact_ratio < 0.8:
+                violations.append({
+                    'type': 'adverse_impact',
+                    'group': group,
+                    'ratio': adverse_impact_ratio,
+                    'group_decline_rate': metrics['decline_rate'],
+                    'reference_decline_rate': ref_metrics['decline_rate']
+                })
+
+            # Violation 2: TPR disparity
+            tpr_diff = abs(metrics['tpr'] - ref_metrics['tpr'])
+            if tpr_diff > 0.05:  # 5% threshold
+                violations.append({
+                    'type': 'tpr_disparity',
+                    'group': group,
+                    'difference': tpr_diff,
+                    'group_tpr': metrics['tpr'],
+                    'reference_tpr': ref_metrics['tpr']
+                })
+
+            # Violation 3: FPR disparity
+            fpr_diff = abs(metrics['fpr'] - ref_metrics['fpr'])
+            if fpr_diff > 0.05:
+                violations.append({
+                    'type': 'fpr_disparity',
+                    'group': group,
+                    'difference': fpr_diff,
+                    'group_fpr': metrics['fpr'],
+                    'reference_fpr': ref_metrics['fpr']
+                })
+
+        return violations
+```
+
+#### Bias Mitigation Strategies
+
+```python
+class BiasMitigation:
+    """
+    Mitigate bias in fraud detection models
+
+    Strategies:
+    1. Pre-processing: Balance training data across groups
+    2. In-processing: Fairness constraints during training
+    3. Post-processing: Adjust decision thresholds per group
+    """
+
+    def preprocess_for_fairness(self, training_data, protected_attribute='race'):
+        """
+        Pre-processing: Balance training data
+
+        Approach: Ensure equal fraud rates across groups in training
+        """
+
+        groups = training_data[protected_attribute].unique()
+        balanced_data = []
+
+        # Target fraud rate: Average across all groups
+        overall_fraud_rate = training_data['is_fraud'].mean()
+
+        for group in groups:
+            group_data = training_data[training_data[protected_attribute] == group]
+
+            # Resample to match target fraud rate
+            fraud_samples = group_data[group_data['is_fraud'] == 1]
+            legit_samples = group_data[group_data['is_fraud'] == 0]
+
+            # Calculate required samples
+            total_samples = len(group_data)
+            target_fraud_count = int(total_samples * overall_fraud_rate)
+            target_legit_count = total_samples - target_fraud_count
+
+            # Oversample/undersample
+            resampled_fraud = fraud_samples.sample(
+                n=target_fraud_count,
+                replace=(len(fraud_samples) < target_fraud_count)
+            )
+            resampled_legit = legit_samples.sample(
+                n=target_legit_count,
+                replace=(len(legit_samples) < target_legit_count)
+            )
+
+            balanced_data.append(pd.concat([resampled_fraud, resampled_legit]))
+
+        return pd.concat(balanced_data).sample(frac=1)  # Shuffle
+
+    def train_with_fairness_constraints(self, training_data):
+        """
+        In-processing: Add fairness constraints to loss function
+
+        Modified loss = Classification loss + λ × Fairness penalty
+
+        Fairness penalty: Difference in FPR across groups
+        """
+
+        import torch
+        import torch.nn as nn
+
+        class FairClassifier(nn.Module):
+            def __init__(self, input_dim, protected_groups):
+                super().__init__()
+                self.classifier = nn.Sequential(
+                    nn.Linear(input_dim, 128),
+                    nn.ReLU(),
+                    nn.Dropout(0.3),
+                    nn.Linear(128, 64),
+                    nn.ReLU(),
+                    nn.Linear(64, 1),
+                    nn.Sigmoid()
+                )
+                self.protected_groups = protected_groups
+
+            def forward(self, x, groups):
+                return self.classifier(x)
+
+            def compute_fairness_loss(self, predictions, labels, groups):
+                """
+                Fairness loss: Penalize FPR differences across groups
+                """
+
+                group_fprs = []
+
+                for group_id in self.protected_groups:
+                    group_mask = (groups == group_id)
+
+                    # False positives for this group
+                    group_legit = labels[group_mask] == 0
+                    group_legit_preds = predictions[group_mask][group_legit]
+
+                    # FPR = P(predict fraud | truly legitimate)
+                    fpr = group_legit_preds.mean()
+                    group_fprs.append(fpr)
+
+                # Fairness penalty: Variance in FPR across groups
+                fairness_penalty = torch.var(torch.stack(group_fprs))
+
+                return fairness_penalty
+
+        # Training loop with fairness
+        model = FairClassifier(input_dim=100, protected_groups=[0, 1, 2])
+        optimizer = torch.optim.Adam(model.parameters())
+
+        fairness_weight = 0.1  # λ hyperparameter
+
+        for epoch in range(100):
+            predictions = model(X_train, groups_train)
+
+            # Classification loss (BCE)
+            classification_loss = nn.BCELoss()(predictions, y_train)
+
+            # Fairness loss
+            fairness_loss = model.compute_fairness_loss(
+                predictions,
+                y_train,
+                groups_train
+            )
+
+            # Combined loss
+            total_loss = classification_loss + fairness_weight * fairness_loss
+
+            optimizer.zero_grad()
+            total_loss.backward()
+            optimizer.step()
+
+        return model
+
+    def postprocess_for_fairness(self, model, validation_data, protected_attribute='race'):
+        """
+        Post-processing: Adjust decision thresholds per group
+
+        Goal: Equalize TPR and FPR across groups
+
+        Approach:
+        - For each group, find optimal threshold that matches target TPR/FPR
+        - Different groups may have different thresholds
+        """
+
+        groups = validation_data[protected_attribute].unique()
+
+        # Target metrics (from majority group)
+        reference_group = groups[0]
+        ref_data = validation_data[validation_data[protected_attribute] == reference_group]
+        ref_predictions = model.predict_proba(ref_data)[:, 1]
+        ref_labels = ref_data['is_fraud']
+
+        # Find reference threshold that achieves target performance
+        target_tpr = 0.90
+        target_fpr = 0.05
+        ref_threshold = self.find_threshold(ref_predictions, ref_labels, target_tpr, target_fpr)
+
+        # For each group, find threshold that matches reference TPR/FPR
+        group_thresholds = {reference_group: ref_threshold}
+
+        for group in groups:
+            if group == reference_group:
+                continue
+
+            group_data = validation_data[validation_data[protected_attribute] == group]
+            group_predictions = model.predict_proba(group_data)[:, 1]
+            group_labels = group_data['is_fraud']
+
+            # Find threshold for this group that matches target TPR/FPR
+            group_threshold = self.find_threshold(
+                group_predictions,
+                group_labels,
+                target_tpr,
+                target_fpr
+            )
+
+            group_thresholds[group] = group_threshold
+
+        return group_thresholds
+
+    def find_threshold(self, predictions, labels, target_tpr, target_fpr):
+        """
+        Find threshold that achieves target TPR and FPR
+        """
+
+        from sklearn.metrics import roc_curve
+
+        fpr_curve, tpr_curve, thresholds = roc_curve(labels, predictions)
+
+        # Find threshold closest to target
+        best_threshold = 0.5
+        best_distance = float('inf')
+
+        for fpr, tpr, thresh in zip(fpr_curve, tpr_curve, thresholds):
+            distance = abs(tpr - target_tpr) + abs(fpr - target_fpr)
+
+            if distance < best_distance:
+                best_distance = distance
+                best_threshold = thresh
+
+        return best_threshold
+```
+
+### 4. Advanced Model Monitoring (Concept Drift Detection)
+
+**Interviewer:** "How do you detect when your fraud model is degrading in production?"
+
+**You:** "Model monitoring is critical in fraud detection because fraud patterns evolve rapidly. Here's our comprehensive monitoring system:
+
+```python
+class FraudModelMonitoring:
+    """
+    Production model monitoring for fraud detection
+
+    What to monitor:
+    1. Performance metrics (precision, recall, F1)
+    2. Feature drift (PSI, KS statistic)
+    3. Prediction drift (score distribution changes)
+    4. Business metrics (cost, false positive rate)
+    """
+
+    def monitor_model_performance(self):
+        """
+        Daily performance monitoring
+
+        Metrics:
+        - Precision: % of declined transactions that are actual fraud
+        - Recall: % of fraud transactions that are caught
+        - F1 score: Harmonic mean
+        - AUC-ROC: Discrimination ability
+        """
+
+        # Fetch yesterday's transactions and labels (delayed)
+        yesterday = datetime.date.today() - datetime.timedelta(days=1)
+        transactions = self.fetch_transactions(yesterday)
+        predictions = self.fetch_predictions(yesterday)
+
+        # Labels (early feedback: user reports, merchant reports)
+        # Chargebacks will arrive later (30-90 days)
+        early_labels = self.fetch_early_labels(yesterday)
+
+        # Compute metrics
+        metrics = {
+            'precision': precision_score(early_labels, predictions),
+            'recall': recall_score(early_labels, predictions),
+            'f1': f1_score(early_labels, predictions),
+            'auc_roc': roc_auc_score(early_labels, predictions)
+        }
+
+        # Check for performance degradation
+        if metrics['precision'] < 0.80:  # Target: 85%
+            self.alert('PRECISION_DROP', metrics)
+
+        if metrics['recall'] < 0.85:  # Target: 90%
+            self.alert('RECALL_DROP', metrics)
+
+        return metrics
+
+    def monitor_feature_drift(self, baseline_data, current_data):
+        """
+        Detect feature distribution drift
+
+        Methods:
+        1. PSI (Population Stability Index)
+        2. KS statistic (Kolmogorov-Smirnov)
+        3. Jensen-Shannon divergence
+        """
+
+        drift_report = {}
+
+        for feature in baseline_data.columns:
+            # Method 1: PSI (Population Stability Index)
+            psi = self.compute_psi(
+                baseline_data[feature],
+                current_data[feature]
+            )
+
+            # Method 2: KS statistic
+            ks_stat, ks_pvalue = self.compute_ks_statistic(
+                baseline_data[feature],
+                current_data[feature]
+            )
+
+            # Method 3: Jensen-Shannon divergence
+            js_div = self.compute_js_divergence(
+                baseline_data[feature],
+                current_data[feature]
+            )
+
+            drift_report[feature] = {
+                'psi': psi,
+                'ks_statistic': ks_stat,
+                'ks_pvalue': ks_pvalue,
+                'js_divergence': js_div,
+                'drift_detected': psi > 0.25 or ks_pvalue < 0.01
+            }
+
+            # Alert if significant drift
+            if drift_report[feature]['drift_detected']:
+                self.alert(f'FEATURE_DRIFT: {feature}', drift_report[feature])
+
+        return drift_report
+
+    def compute_psi(self, baseline, current, bins=10):
+        """
+        Population Stability Index (PSI)
+
+        PSI = Σ (current% - baseline%) × ln(current% / baseline%)
+
+        Interpretation:
+        - PSI < 0.1: No significant change
+        - 0.1 <= PSI < 0.25: Moderate drift (investigate)
+        - PSI >= 0.25: High drift (retrain model)
+        """
+
+        # Create bins
+        bin_edges = np.histogram_bin_edges(baseline, bins=bins)
+
+        # Compute distributions
+        baseline_dist, _ = np.histogram(baseline, bins=bin_edges)
+        current_dist, _ = np.histogram(current, bins=bin_edges)
+
+        # Normalize to percentages
+        baseline_pct = baseline_dist / baseline_dist.sum() + 1e-10  # Avoid log(0)
+        current_pct = current_dist / current_dist.sum() + 1e-10
+
+        # Compute PSI
+        psi = np.sum((current_pct - baseline_pct) * np.log(current_pct / baseline_pct))
+
+        return psi
+
+    def compute_ks_statistic(self, baseline, current):
+        """
+        Kolmogorov-Smirnov statistic
+
+        Measures maximum distance between two cumulative distributions
+
+        Returns:
+        - ks_stat: Maximum distance (0 to 1)
+        - p_value: Significance (< 0.01 means significant drift)
+        """
+
+        from scipy.stats import ks_2samp
+
+        ks_stat, p_value = ks_2samp(baseline, current)
+
+        return ks_stat, p_value
+
+    def monitor_prediction_drift(self, baseline_predictions, current_predictions):
+        """
+        Monitor fraud score distribution drift
+
+        Check if model is becoming:
+        - Too conservative (scores too high → more declines)
+        - Too lenient (scores too low → more fraud slips through)
+        """
+
+        # Compare score distributions
+        baseline_mean = np.mean(baseline_predictions)
+        current_mean = np.mean(current_predictions)
+
+        baseline_std = np.std(baseline_predictions)
+        current_std = np.std(current_predictions)
+
+        # Check for significant mean shift
+        mean_shift = current_mean - baseline_mean
+        mean_shift_pct = (mean_shift / baseline_mean) * 100
+
+        if abs(mean_shift_pct) > 20:  # 20% change in average score
+            self.alert('PREDICTION_DRIFT', {
+                'baseline_mean': baseline_mean,
+                'current_mean': current_mean,
+                'shift_pct': mean_shift_pct
+            })
+
+        return {
+            'baseline_mean': baseline_mean,
+            'current_mean': current_mean,
+            'baseline_std': baseline_std,
+            'current_std': current_std,
+            'mean_shift_pct': mean_shift_pct
+        }
+```
+
+---
+
+---
 
 **You:** "To summarize the Fraud Detection system design:
 
