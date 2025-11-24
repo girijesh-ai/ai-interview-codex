@@ -151,7 +151,7 @@ Sounds good?"
 ```mermaid
 graph TB
     subgraph "User Layer"
-        U[User Query:<br/>"I want to return my laptop"]
+        U[User Query:<br/>I want to return my laptop]
         UI[Chat Interface]
     end
 
@@ -1167,6 +1167,1011 @@ This design demonstrates:
 - Tool use and safety
 - Production considerations (latency, cost, observability)
 - 2025 best practices (LangGraph, LangSmith)"
+
+---
+
+## Staff-Level Deep Dives
+
+### Agent Coordination Protocols & Communication
+
+**Interviewer:** "How do agents communicate and coordinate efficiently in complex workflows?"
+
+**You:** "Agent coordination is critical for multi-agent systems. Let me detail the communication protocols:
+
+#### Inter-Agent Communication Patterns
+
+```python
+class AgentCommunicationProtocol:
+    """
+    Define how agents communicate with each other
+
+    Patterns:
+    1. Message Passing (async, decoupled)
+    2. Shared State (LangGraph state)
+    3. Event Broadcasting (pub-sub)
+    4. Direct Invocation (RPC-style)
+    """
+
+    def __init__(self):
+        self.message_queue = MessageQueue()
+        self.shared_state = SharedState()
+        self.event_bus = EventBus()
+
+    def send_message(self, from_agent: str, to_agent: str, message: dict):
+        """
+        Message passing: Agent A sends message to Agent B
+
+        Use case: Order agent tells billing agent to process refund
+
+        Advantages:
+        - Asynchronous (non-blocking)
+        - Decoupled (agents don't need to know about each other)
+        - Scalable (messages can be queued)
+
+        Disadvantages:
+        - Eventual consistency (not immediate)
+        - Requires message queue infrastructure
+        """
+
+        envelope = {
+            'from': from_agent,
+            'to': to_agent,
+            'message': message,
+            'timestamp': datetime.now(),
+            'message_id': str(uuid.uuid4())
+        }
+
+        # Add to queue
+        self.message_queue.enqueue(to_agent, envelope)
+
+        return envelope['message_id']
+
+    def broadcast_event(self, event_type: str, payload: dict):
+        """
+        Event broadcasting: Agent publishes event, subscribers react
+
+        Use case: Order agent broadcasts "order_cancelled" event
+                 → Billing agent listens and triggers refund
+                 → Inventory agent listens and restocks
+
+        Advantages:
+        - Loosely coupled (publishers don't know subscribers)
+        - Scalable (add subscribers without changing publisher)
+        - Event sourcing (full audit trail)
+
+        Disadvantages:
+        - Complex debugging (event flow hard to trace)
+        - Potential event storms (cascading events)
+        """
+
+        event = {
+            'type': event_type,
+            'payload': payload,
+            'timestamp': datetime.now(),
+            'event_id': str(uuid.uuid4())
+        }
+
+        # Publish to all subscribers
+        self.event_bus.publish(event_type, event)
+
+        return event['event_id']
+
+    def update_shared_state(self, agent_id: str, updates: dict):
+        """
+        Shared state: All agents read/write to common state
+
+        Use case: LangGraph state with conversation history
+
+        Advantages:
+        - Simple (all agents see same state)
+        - Immediate consistency
+        - Easy to debug (single source of truth)
+
+        Disadvantages:
+        - Tight coupling (agents depend on state schema)
+        - Concurrency issues (race conditions)
+        - Not scalable (single state bottleneck)
+        """
+
+        with self.shared_state.lock:
+            # Atomic update
+            for key, value in updates.items():
+                self.shared_state.set(agent_id, key, value)
+
+        return self.shared_state.get_snapshot()
+
+    def invoke_agent(self, from_agent: str, target_agent: str, request: dict):
+        """
+        Direct invocation: Agent A calls Agent B synchronously
+
+        Use case: Supervisor invokes specialist agent
+
+        Advantages:
+        - Simple (just function call)
+        - Immediate response
+        - Easy error handling
+
+        Disadvantages:
+        - Tight coupling (caller waits for callee)
+        - Not scalable (blocking)
+        - Failure propagation (one agent fails → all fail)
+        """
+
+        # Find target agent
+        agent = self.get_agent(target_agent)
+
+        # Invoke directly
+        try:
+            response = agent.execute(request)
+            return {'status': 'success', 'response': response}
+        except Exception as e:
+            return {'status': 'error', 'error': str(e)}
+
+
+class MessageQueue:
+    """
+    Message queue for async agent communication
+
+    Implementation: Redis Streams or RabbitMQ
+    """
+
+    def __init__(self):
+        # Redis Streams for message queue
+        import redis
+        self.redis = redis.Redis(host='localhost', port=6379)
+
+    def enqueue(self, agent_id: str, message: dict):
+        """Add message to agent's queue"""
+
+        queue_name = f"agent:{agent_id}:queue"
+
+        # Add to Redis stream
+        self.redis.xadd(
+            queue_name,
+            {
+                'from': message['from'],
+                'message': json.dumps(message['message']),
+                'timestamp': message['timestamp'].isoformat()
+            }
+        )
+
+    def dequeue(self, agent_id: str, block_ms: int = 1000):
+        """Get next message from agent's queue"""
+
+        queue_name = f"agent:{agent_id}:queue"
+
+        # Read from Redis stream
+        messages = self.redis.xread(
+            {queue_name: '0'},  # Read from beginning
+            count=1,
+            block=block_ms
+        )
+
+        if messages:
+            stream_name, message_list = messages[0]
+            message_id, fields = message_list[0]
+
+            return {
+                'from': fields[b'from'].decode('utf-8'),
+                'message': json.loads(fields[b'message']),
+                'timestamp': datetime.fromisoformat(fields[b'timestamp'].decode('utf-8'))
+            }
+
+        return None
+
+
+class EventBus:
+    """
+    Pub-sub event bus for agent communication
+
+    Implementation: Redis Pub/Sub or Kafka
+    """
+
+    def __init__(self):
+        import redis
+        self.redis = redis.Redis(host='localhost', port=6379)
+        self.pubsub = self.redis.pubsub()
+        self.subscribers = {}  # event_type → [agent_ids]
+
+    def subscribe(self, agent_id: str, event_types: List[str]):
+        """Agent subscribes to event types"""
+
+        for event_type in event_types:
+            if event_type not in self.subscribers:
+                self.subscribers[event_type] = []
+
+            self.subscribers[event_type].append(agent_id)
+
+            # Subscribe to Redis channel
+            channel = f"events:{event_type}"
+            self.pubsub.subscribe(channel)
+
+    def publish(self, event_type: str, event: dict):
+        """Publish event to all subscribers"""
+
+        channel = f"events:{event_type}"
+
+        # Publish to Redis
+        self.redis.publish(
+            channel,
+            json.dumps(event)
+        )
+
+        # Notify subscribers
+        if event_type in self.subscribers:
+            for agent_id in self.subscribers[event_type]:
+                print(f"Notifying {agent_id} of event {event_type}")
+
+    def listen(self, agent_id: str):
+        """Listen for events (blocking)"""
+
+        for message in self.pubsub.listen():
+            if message['type'] == 'message':
+                event = json.loads(message['data'])
+                yield event
+```
+
+### Consensus Mechanisms
+
+**Interviewer:** "How do multiple agents reach consensus when they disagree?"
+
+**You:** "Consensus is critical when multiple agents provide conflicting answers:
+
+#### Multi-Agent Consensus Strategies
+
+```python
+class ConsensusManager:
+    """
+    Manage consensus among multiple agents
+
+    Strategies:
+    1. Majority voting
+    2. Confidence-weighted voting
+    3. Debate and judge
+    4. Mixture of experts
+    5. Human-in-the-loop (final arbiter)
+    """
+
+    def __init__(self, agents: List[str]):
+        self.agents = agents
+        self.voting_history = []
+
+    def majority_vote(self, agent_responses: Dict[str, str]) -> str:
+        """
+        Simple majority voting
+
+        Example:
+        - Agent A: "Answer is X"
+        - Agent B: "Answer is X"
+        - Agent C: "Answer is Y"
+        - Result: "Answer is X" (2 vs 1)
+
+        Use case: Multiple agents verify same fact
+        """
+
+        from collections import Counter
+
+        # Count votes
+        votes = Counter(agent_responses.values())
+
+        # Get majority
+        majority_answer, count = votes.most_common(1)[0]
+
+        # Require >50% for consensus
+        if count > len(agent_responses) / 2:
+            return {
+                'answer': majority_answer,
+                'confidence': count / len(agent_responses),
+                'method': 'majority_vote'
+            }
+        else:
+            return {
+                'answer': None,
+                'confidence': 0,
+                'method': 'no_consensus'
+            }
+
+    def confidence_weighted_vote(self, agent_responses: Dict[str, dict]) -> str:
+        """
+        Weighted voting based on agent confidence
+
+        Example:
+        - Agent A: "Answer is X" (confidence: 0.9)
+        - Agent B: "Answer is X" (confidence: 0.7)
+        - Agent C: "Answer is Y" (confidence: 0.5)
+        - Result: "Answer is X" (weighted score: 1.6 vs 0.5)
+
+        Use case: Agents have varying expertise
+        """
+
+        answer_scores = {}
+
+        for agent_id, response in agent_responses.items():
+            answer = response['answer']
+            confidence = response.get('confidence', 1.0)
+
+            if answer not in answer_scores:
+                answer_scores[answer] = 0
+
+            answer_scores[answer] += confidence
+
+        # Get highest weighted answer
+        best_answer = max(answer_scores, key=answer_scores.get)
+
+        total_weight = sum(answer_scores.values())
+
+        return {
+            'answer': best_answer,
+            'confidence': answer_scores[best_answer] / total_weight,
+            'method': 'confidence_weighted_vote',
+            'scores': answer_scores
+        }
+
+    def debate_and_judge(self,
+                        initial_responses: Dict[str, str],
+                        judge_agent,
+                        max_rounds: int = 3):
+        """
+        Agents debate, judge makes final decision
+
+        Process:
+        1. Each agent provides initial answer
+        2. Agents critique each other's answers
+        3. Agents revise based on critiques
+        4. Repeat for max_rounds
+        5. Judge agent makes final decision
+
+        Example:
+        Round 1:
+        - Agent A: "Capital of France is Paris"
+        - Agent B: "Capital of France is Lyon"
+
+        Round 2 (critique):
+        - Agent A: "Lyon is second-largest city, not capital"
+        - Agent B: "You're right, Paris is the capital"
+
+        Judge: "Both now agree, answer is Paris"
+
+        Use case: Complex questions with nuance
+        """
+
+        debate_history = []
+        current_answers = initial_responses
+
+        for round_num in range(max_rounds):
+            # Agents critique each other
+            critiques = {}
+
+            for agent_id, answer in current_answers.items():
+                # Get other agents' answers
+                other_answers = {
+                    k: v for k, v in current_answers.items()
+                    if k != agent_id
+                }
+
+                # Agent critiques others
+                critique = self.generate_critique(
+                    agent_id,
+                    answer,
+                    other_answers
+                )
+
+                critiques[agent_id] = critique
+
+            # Agents revise based on critiques
+            revised_answers = {}
+
+            for agent_id, answer in current_answers.items():
+                # Get critiques of this answer
+                relevant_critiques = [
+                    c for aid, c in critiques.items()
+                    if aid != agent_id
+                ]
+
+                # Revise answer
+                revised = self.revise_answer(
+                    agent_id,
+                    answer,
+                    relevant_critiques
+                )
+
+                revised_answers[agent_id] = revised
+
+            debate_history.append({
+                'round': round_num,
+                'answers': current_answers,
+                'critiques': critiques,
+                'revised': revised_answers
+            })
+
+            current_answers = revised_answers
+
+            # Check if consensus reached
+            if len(set(current_answers.values())) == 1:
+                # All agents agree
+                return {
+                    'answer': list(current_answers.values())[0],
+                    'confidence': 1.0,
+                    'method': 'debate_consensus',
+                    'rounds': round_num + 1,
+                    'debate_history': debate_history
+                }
+
+        # No consensus, ask judge
+        judge_decision = judge_agent.decide(
+            debate_history=debate_history,
+            final_answers=current_answers
+        )
+
+        return {
+            'answer': judge_decision['answer'],
+            'confidence': judge_decision['confidence'],
+            'method': 'judge_decision',
+            'rounds': max_rounds,
+            'debate_history': debate_history,
+            'judge_reasoning': judge_decision['reasoning']
+        }
+
+    def mixture_of_experts(self, agent_responses: Dict[str, dict], query: str):
+        """
+        Combine answers from multiple expert agents
+
+        Use case: Different agents are experts in different domains
+
+        Example:
+        Query: "What's the capital and GDP of France?"
+
+        Agent A (Geography expert): "Capital is Paris"
+        Agent B (Economics expert): "GDP is $2.7T"
+
+        Combined: "Capital is Paris, GDP is $2.7T"
+
+        Strategy: Use all answers, each agent contributes their expertise
+        """
+
+        # Classify query to determine which agents are relevant
+        relevant_agents = self.identify_relevant_agents(query)
+
+        combined_answer = {}
+
+        for agent_id, response in agent_responses.items():
+            if agent_id in relevant_agents:
+                # Weight by agent's expertise for this query
+                expertise_weight = relevant_agents[agent_id]
+
+                combined_answer[agent_id] = {
+                    'answer': response['answer'],
+                    'weight': expertise_weight
+                }
+
+        # Merge answers
+        final_answer = self.merge_expert_answers(combined_answer)
+
+        return {
+            'answer': final_answer,
+            'method': 'mixture_of_experts',
+            'expert_contributions': combined_answer
+        }
+
+    def human_in_the_loop(self, agent_responses: Dict[str, str]):
+        """
+        Escalate to human when agents can't reach consensus
+
+        Use case: High-stakes decisions, agents disagree significantly
+
+        Flow:
+        1. Agents provide answers
+        2. No consensus reached
+        3. Present to human reviewer
+        4. Human makes final decision
+        5. Log decision for future training
+        """
+
+        # Check if consensus possible
+        if len(set(agent_responses.values())) > 3:
+            # Too many different answers, escalate
+
+            human_review_request = {
+                'agent_responses': agent_responses,
+                'request_time': datetime.now(),
+                'priority': 'high'
+            }
+
+            # Send to human review queue
+            human_decision = self.request_human_review(human_review_request)
+
+            # Log for future training
+            self.log_human_decision(agent_responses, human_decision)
+
+            return {
+                'answer': human_decision['answer'],
+                'confidence': 1.0,  # Human decisions are authoritative
+                'method': 'human_in_the_loop',
+                'human_reasoning': human_decision['reasoning']
+            }
+```
+
+### Failure Recovery & Circuit Breakers
+
+**Interviewer:** "What happens when an agent fails or times out?"
+
+**You:** "Agent failures are common in production. Let me explain our recovery strategies:
+
+#### Failure Recovery System
+
+```python
+class AgentFailureRecovery:
+    """
+    Handle agent failures gracefully
+
+    Failure modes:
+    1. Agent timeout (takes too long)
+    2. Agent error (exception thrown)
+    3. Tool failure (API down)
+    4. Invalid response (hallucination)
+    5. Resource exhaustion (rate limits)
+    """
+
+    def __init__(self):
+        self.circuit_breakers = {}
+        self.fallback_agents = {}
+        self.retry_policies = {}
+
+    def execute_with_recovery(self, agent_id: str, task: dict):
+        """
+        Execute agent with failure recovery
+
+        Recovery strategies:
+        1. Retry with exponential backoff
+        2. Circuit breaker (stop calling failing agent)
+        3. Fallback to alternative agent
+        4. Degrade gracefully (partial result)
+        5. Escalate to human
+        """
+
+        # Check circuit breaker
+        if self.is_circuit_open(agent_id):
+            # Circuit is open, use fallback
+            return self.execute_fallback(agent_id, task)
+
+        # Execute with timeout
+        try:
+            result = self.execute_with_timeout(
+                agent_id,
+                task,
+                timeout_seconds=30
+            )
+
+            # Success, close circuit if it was half-open
+            self.record_success(agent_id)
+
+            return result
+
+        except TimeoutException:
+            # Agent timed out
+            self.record_failure(agent_id, 'timeout')
+
+            # Retry with exponential backoff
+            for attempt in range(3):
+                wait_time = 2 ** attempt  # 1s, 2s, 4s
+
+                time.sleep(wait_time)
+
+                try:
+                    result = self.execute_with_timeout(
+                        agent_id,
+                        task,
+                        timeout_seconds=30
+                    )
+
+                    self.record_success(agent_id)
+                    return result
+
+                except TimeoutException:
+                    continue
+
+            # All retries failed, open circuit
+            self.open_circuit(agent_id)
+
+            # Use fallback
+            return self.execute_fallback(agent_id, task)
+
+        except AgentException as e:
+            # Agent threw error
+            self.record_failure(agent_id, 'error')
+
+            # Don't retry on errors, use fallback immediately
+            return self.execute_fallback(agent_id, task)
+
+    def execute_with_timeout(self, agent_id: str, task: dict, timeout_seconds: int):
+        """
+        Execute agent with timeout
+
+        Uses threading to enforce timeout
+        """
+
+        import threading
+
+        result = None
+        exception = None
+
+        def run_agent():
+            nonlocal result, exception
+            try:
+                agent = self.get_agent(agent_id)
+                result = agent.execute(task)
+            except Exception as e:
+                exception = e
+
+        # Run in thread with timeout
+        thread = threading.Thread(target=run_agent)
+        thread.start()
+        thread.join(timeout=timeout_seconds)
+
+        if thread.is_alive():
+            # Timeout
+            raise TimeoutException(f"Agent {agent_id} timed out after {timeout_seconds}s")
+
+        if exception:
+            raise AgentException(f"Agent {agent_id} failed: {exception}")
+
+        return result
+
+    def execute_fallback(self, failed_agent_id: str, task: dict):
+        """
+        Execute fallback strategy when agent fails
+
+        Fallback options:
+        1. Alternative agent (if available)
+        2. Cached response (if task seen before)
+        3. Default/safe response
+        4. Human escalation
+        """
+
+        # Option 1: Alternative agent
+        if failed_agent_id in self.fallback_agents:
+            fallback_id = self.fallback_agents[failed_agent_id]
+
+            try:
+                result = self.execute_with_timeout(
+                    fallback_id,
+                    task,
+                    timeout_seconds=30
+                )
+
+                return {
+                    'result': result,
+                    'fallback_used': True,
+                    'fallback_agent': fallback_id
+                }
+
+            except Exception:
+                # Fallback also failed, continue to next option
+                pass
+
+        # Option 2: Cached response
+        cached = self.get_cached_response(task)
+        if cached:
+            return {
+                'result': cached,
+                'fallback_used': True,
+                'fallback_method': 'cache'
+            }
+
+        # Option 3: Default response
+        default = self.get_default_response(failed_agent_id, task)
+        if default:
+            return {
+                'result': default,
+                'fallback_used': True,
+                'fallback_method': 'default'
+            }
+
+        # Option 4: Human escalation
+        return {
+            'result': None,
+            'fallback_used': True,
+            'fallback_method': 'human_escalation',
+            'escalation_reason': f'Agent {failed_agent_id} failed and no fallback available'
+        }
+
+    def is_circuit_open(self, agent_id: str) -> bool:
+        """
+        Check if circuit breaker is open for agent
+
+        Circuit states:
+        - CLOSED: Normal operation
+        - OPEN: Agent is failing, don't call it
+        - HALF_OPEN: Testing if agent recovered
+        """
+
+        if agent_id not in self.circuit_breakers:
+            return False
+
+        breaker = self.circuit_breakers[agent_id]
+
+        if breaker['state'] == 'CLOSED':
+            return False
+
+        elif breaker['state'] == 'OPEN':
+            # Check if enough time has passed to try again
+            time_since_open = (datetime.now() - breaker['opened_at']).seconds
+
+            if time_since_open > breaker['timeout_seconds']:
+                # Transition to HALF_OPEN
+                breaker['state'] = 'HALF_OPEN'
+                return False  # Allow one test call
+
+            return True  # Still open
+
+        elif breaker['state'] == 'HALF_OPEN':
+            return False  # Allow test calls
+
+    def record_failure(self, agent_id: str, failure_type: str):
+        """Record agent failure for circuit breaker"""
+
+        if agent_id not in self.circuit_breakers:
+            self.circuit_breakers[agent_id] = {
+                'state': 'CLOSED',
+                'failure_count': 0,
+                'success_count': 0,
+                'threshold': 5,  # Open after 5 failures
+                'timeout_seconds': 60  # Try again after 60s
+            }
+
+        breaker = self.circuit_breakers[agent_id]
+        breaker['failure_count'] += 1
+
+        # Check if should open circuit
+        if breaker['failure_count'] >= breaker['threshold']:
+            self.open_circuit(agent_id)
+
+    def open_circuit(self, agent_id: str):
+        """Open circuit breaker for agent"""
+
+        breaker = self.circuit_breakers[agent_id]
+        breaker['state'] = 'OPEN'
+        breaker['opened_at'] = datetime.now()
+
+        # Alert
+        print(f"ALERT: Circuit breaker OPEN for agent {agent_id}")
+
+    def record_success(self, agent_id: str):
+        """Record agent success"""
+
+        if agent_id not in self.circuit_breakers:
+            return
+
+        breaker = self.circuit_breakers[agent_id]
+        breaker['success_count'] += 1
+
+        # If in HALF_OPEN, close circuit after success
+        if breaker['state'] == 'HALF_OPEN':
+            breaker['state'] = 'CLOSED'
+            breaker['failure_count'] = 0
+            print(f"Circuit breaker CLOSED for agent {agent_id}")
+```
+
+### Dynamic Agent Selection
+
+**Interviewer:** "How do you decide which agents to use for a given task?"
+
+**You:** "Dynamic agent selection optimizes cost and latency:
+
+```python
+class DynamicAgentSelector:
+    """
+    Intelligently select agents based on task requirements
+
+    Factors:
+    1. Task complexity
+    2. Agent capability match
+    3. Agent cost
+    4. Agent latency
+    5. Agent current load
+    """
+
+    def __init__(self, agents: Dict[str, Agent]):
+        self.agents = agents
+        self.agent_stats = {}  # Track performance
+
+    def select_agents(self, task: dict) -> List[str]:
+        """
+        Select optimal agents for task
+
+        Strategy:
+        1. Classify task complexity
+        2. Match to agent capabilities
+        3. Optimize for cost + latency + quality
+        """
+
+        # Classify task
+        complexity = self.classify_task_complexity(task)
+
+        # Get candidate agents
+        candidates = self.get_capable_agents(task)
+
+        # Score agents
+        scored_agents = []
+
+        for agent_id in candidates:
+            agent = self.agents[agent_id]
+            stats = self.agent_stats.get(agent_id, {})
+
+            # Compute score
+            score = self.compute_agent_score(
+                agent,
+                task,
+                complexity,
+                stats
+            )
+
+            scored_agents.append((agent_id, score))
+
+        # Select top agents
+        scored_agents.sort(key=lambda x: x[1], reverse=True)
+
+        # Select number of agents based on complexity
+        if complexity == 'simple':
+            num_agents = 1
+        elif complexity == 'medium':
+            num_agents = 2
+        else:  # complex
+            num_agents = 3
+
+        selected = [agent_id for agent_id, score in scored_agents[:num_agents]]
+
+        return selected
+
+    def compute_agent_score(self,
+                           agent: Agent,
+                           task: dict,
+                           complexity: str,
+                           stats: dict) -> float:
+        """
+        Compute agent fitness score for task
+
+        Score = Quality × Speed × (1/Cost) × Availability
+
+        Where:
+        - Quality: Agent's success rate on similar tasks
+        - Speed: 1 / avg_latency
+        - Cost: 1 / cost_per_task
+        - Availability: 1 - current_load
+        """
+
+        # Quality (0-1)
+        quality = stats.get('success_rate', 0.5)
+
+        # Speed (normalized)
+        avg_latency = stats.get('avg_latency_seconds', 5.0)
+        speed = 1.0 / (1.0 + avg_latency)  # 0-1, higher is better
+
+        # Cost (normalized)
+        cost_per_task = stats.get('cost_per_task', 0.10)
+        cost_score = 1.0 / (1.0 + cost_per_task * 10)  # 0-1, higher is better
+
+        # Availability (0-1)
+        current_load = stats.get('current_load', 0.0)
+        availability = 1.0 - current_load
+
+        # Combine (weighted)
+        score = (
+            0.4 * quality +
+            0.2 * speed +
+            0.2 * cost_score +
+            0.2 * availability
+        )
+
+        return score
+```
+
+### Long-Term Maintenance
+
+**You:** "Multi-agent systems require continuous maintenance:
+
+#### Agent Retraining Schedule
+
+```
+Specialist Agents:
+- Retrain: Bi-weekly (user queries evolve)
+- Training data: Last 30 days of conversations
+- Validation: Offline accuracy + online A/B test
+- Deployment: Canary rollout (5% → 25% → 100%)
+
+Supervisor Agent:
+- Retrain: Monthly (routing patterns stable)
+- Training data: Agent routing decisions + outcomes
+- Validation: Routing accuracy (90%+ correct agent)
+
+Tool Calling Models:
+- Retrain: Weekly (API schemas change)
+- Training data: Tool call examples + results
+- Validation: Tool call success rate
+
+Safety Guardrails:
+- Retrain: Daily (adversarial attacks evolve)
+- Training data: Flagged content + human reviews
+- Validation: Precision/recall on test set
+```
+
+#### When to Re-architect
+
+```
+Signals for major changes:
+
+1. Coordination overhead >50% of total cost
+   → Consider: Consolidate agents, use single larger model
+
+2. Consensus failure rate >20%
+   → Improve: Better agent specialization, judge agent
+
+3. Human escalation rate >30%
+   → Improve: Agent capabilities, better training data
+
+4. Average conversation requires >5 agents
+   → Simplify: Agent consolidation, better routing
+
+5. Latency SLO violated (>10s for >7 days)
+   → Optimize: Agent parallelization, model distillation
+```
+
+### Organizational Context
+
+**You:** "Multi-agent AI systems require specialized team:
+
+#### Team Structure
+
+```
+Core Multi-Agent Team (12 engineers):
+- 4 AI Engineers: Agent development, prompt engineering
+- 3 Backend Engineers: Orchestration, state management
+- 2 ML Infra Engineers: Model serving, LangGraph infrastructure
+- 2 Data Engineers: Training data pipelines, conversation logs
+- 1 Staff Engineer: Architecture, agent patterns
+
+Partner Teams:
+- Safety Team: Guardrails, content moderation
+- Product: Agent capabilities, user experience
+- Data Science: Evaluation metrics, A/B testing
+
+On-Call:
+- 24/7 on-call (customer support critical)
+- Rotation: 1 week shifts, 4 engineers
+- Escalation: Staff engineer → EM → Director
+```
+
+#### Cross-Functional Trade-offs
+
+**You:** "Common conflicts:
+
+**Product wants:**
+- 10 specialized agents (comprehensive coverage)
+- Solution: Better coverage, higher success rate
+
+**Engineering concerns:**
+- Coordination complexity, higher latency, 10× cost
+- Solution: Fewer agents means faster, cheaper
+
+**Resolution:**
+- Analysis: 5 agents vs 10 agents A/B test
+- Results: 5 agents = 85% success rate, avg 3s latency, $0.20/conv
+- Results: 10 agents = 87% success rate, avg 7s latency, $0.60/conv
+- Decision: 5 agents (2% quality loss not worth 3× cost + 2× latency)
+- Compromise: Add 6th agent for high-value use cases only
+
+**Safety wants:**
+- Human approval for all refunds
+- Solution: Maximum safety, no fraud
+
+**Business wants:**
+- Instant refunds (better UX)
+- Solution: Higher customer satisfaction
+
+**Resolution:**
+- Risk-based approval: <$50 instant, $50-$100 auto with review, >$100 human approval
+- Impact: 80% refunds instant, fraud rate <0.5%
+- Decision: Balanced approach wins
 
 ---
 

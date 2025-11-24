@@ -1713,7 +1713,1147 @@ class AdversarialDefense:
 
 ---
 
-## Summary & Key Takeaways
+## Staff-Level Deep Dives
+
+### 1. Adversarial ML & Model Poisoning Defense
+
+**Interviewer:** "Fraudsters actively try to reverse engineer your model and poison your training data. How do you defend against adversarial attacks?"
+
+**You:** "Excellent question! Fraud detection is one of the most adversarial ML problems. Let me explain our multi-layered defense:
+
+#### Attack Vector 1: Model Reverse Engineering
+
+**Attack:** Fraudsters make thousands of test transactions to probe model boundaries and learn decision thresholds.
+
+```python
+class AdversarialDefense:
+    """
+    Defend against model reverse engineering
+
+    Key principle: Assume adversary has full model knowledge
+    Don't rely on obscurity
+    """
+
+    def __init__(self):
+        self.ensemble_models = [
+            XGBoostModel(),
+            LightGBMModel(),
+            NeuralNetwork(),
+            RandomForest()
+        ]
+        self.feature_subsampling_rate = 0.8
+        self.threshold_variance = 0.05
+
+    def predict_with_defense(self, transaction):
+        """
+        Multi-layered adversarial defense
+
+        Defenses:
+        1. Model ensemble (harder to reverse 4 models than 1)
+        2. Random feature subsampling
+        3. Threshold randomization
+        4. Honeypot features
+        """
+
+        # Defense 1: Random feature subsampling
+        # Different transactions use different feature subsets
+        # Makes boundary probing ineffective
+        features = self.extract_features(transaction)
+        feature_subset = self.random_feature_subsample(
+            features,
+            rate=self.feature_subsampling_rate
+        )
+
+        # Defense 2: Model ensemble with voting
+        # Even if attacker learns one model, ensemble is robust
+        predictions = []
+        for model in self.ensemble_models:
+            pred = model.predict(feature_subset)
+            predictions.append(pred)
+
+        # Weighted voting (models have different weights)
+        ensemble_score = self.weighted_vote(predictions)
+
+        # Defense 3: Dynamic threshold randomization
+        # Threshold varies slightly per transaction
+        # Prevents exact boundary mapping
+        base_threshold = 0.7
+        randomized_threshold = base_threshold + random.uniform(
+            -self.threshold_variance,
+            self.threshold_variance
+        )
+
+        # Defense 4: Honeypot features
+        # Features that legitimate users never trigger
+        # But fraudsters probing might accidentally trigger
+        if self.check_honeypot_triggered(transaction):
+            # Suspicious behavior detected
+            ensemble_score = max(ensemble_score, 0.95)
+
+        decision = 'DECLINE' if ensemble_score > randomized_threshold else 'APPROVE'
+
+        return {
+            'decision': decision,
+            'score': ensemble_score,
+            'threshold': randomized_threshold  # Don't log this in production!
+        }
+
+    def random_feature_subsample(self, features, rate=0.8):
+        """
+        Randomly drop 20% of features
+
+        Why this works:
+        - Attacker can't probe all feature combinations
+        - Decision boundary becomes fuzzy
+        - Probing transactions get inconsistent results
+        """
+        import random
+
+        feature_names = list(features.keys())
+        keep_count = int(len(feature_names) * rate)
+
+        # Deterministic random (same transaction_id gets same subset)
+        # But attacker doesn't know the seed
+        random.seed(hash(features['transaction_id']) % 1000000)
+        selected_features = random.sample(feature_names, keep_count)
+
+        return {k: v for k, v in features.items() if k in selected_features}
+
+    def check_honeypot_triggered(self, transaction):
+        """
+        Honeypot features: Detect adversarial probing
+
+        Examples:
+        - User-Agent strings that match known testing tools
+        - Sequential transaction IDs (automated testing)
+        - Perfectly round amounts ($100.00, $500.00 - real users are messier)
+        - Transactions exactly at decision boundaries
+        - Multiple failed auth attempts followed by success
+        """
+
+        honeypots = []
+
+        # Honeypot 1: Suspicious user agent
+        if 'curl' in transaction.user_agent.lower() or 'python' in transaction.user_agent.lower():
+            honeypots.append('suspicious_user_agent')
+
+        # Honeypot 2: Round amounts (fraudsters test boundaries)
+        if transaction.amount % 100 == 0 and transaction.amount >= 100:
+            honeypots.append('round_amount')
+
+        # Honeypot 3: Sequential probing pattern
+        # Check if user made 10+ transactions in 1 minute
+        recent_txn_count = self.get_recent_transaction_count(
+            transaction.user_id,
+            window_seconds=60
+        )
+        if recent_txn_count > 10:
+            honeypots.append('rapid_fire_testing')
+
+        # Honeypot 4: Boundary probing
+        # Transactions at exactly $99, $199, $299, etc.
+        if transaction.amount in [99, 199, 299, 499, 999]:
+            honeypots.append('boundary_probing')
+
+        return len(honeypots) >= 2  # Multiple honeypots = likely adversarial
+```
+
+#### Attack Vector 2: Training Data Poisoning
+
+**Attack:** Fraudsters create thousands of "legitimate-looking" fraudulent transactions to poison training data.
+
+```python
+class DataPoisoningDefense:
+    """
+    Defend against training data poisoning
+
+    Attack scenario:
+    - Fraudster makes 1000 small fraudulent transactions ($5-10)
+    - None get reported as fraud (too small to notice)
+    - Model learns these patterns as "safe"
+    - Later, fraudster scales up to $500 transactions with same pattern
+    """
+
+    def clean_training_data(self, transactions, labels):
+        """
+        Detect and remove poisoned training samples
+
+        Techniques:
+        1. Outlier detection in feature space
+        2. Clustering-based anomaly detection
+        3. Influence function analysis
+        4. Ensemble disagreement detection
+        """
+
+        # Step 1: Detect samples that cause high model disagreement
+        # If ensemble models disagree strongly, sample might be poisoned
+        ensemble_predictions = self.get_ensemble_predictions(transactions)
+        disagreement_scores = self.compute_disagreement(ensemble_predictions)
+
+        # Step 2: Influence function analysis
+        # Which training samples have highest influence on model?
+        # Poisoned samples often have abnormally high influence
+        influence_scores = self.compute_influence_scores(transactions, labels)
+
+        # Step 3: Remove suspected poisoned samples
+        clean_indices = []
+        for i, (txn, label) in enumerate(zip(transactions, labels)):
+            # Remove if:
+            # - High ensemble disagreement
+            # - High influence score
+            # - Suspicious patterns (small frauds that weren't reported)
+
+            is_suspicious = (
+                disagreement_scores[i] > 0.7 or
+                influence_scores[i] > 0.9 or
+                self.is_suspicious_pattern(txn, label)
+            )
+
+            if not is_suspicious:
+                clean_indices.append(i)
+
+        # Return cleaned dataset
+        clean_transactions = [transactions[i] for i in clean_indices]
+        clean_labels = [labels[i] for i in clean_indices]
+
+        print(f"Removed {len(transactions) - len(clean_transactions)} suspected poisoned samples")
+
+        return clean_transactions, clean_labels
+
+    def is_suspicious_pattern(self, txn, label):
+        """
+        Detect suspicious patterns in training data
+
+        Red flags:
+        - Label says "legitimate" but amount is very high for user
+        - Label says "legitimate" but from high-risk merchant
+        - Label says "legitimate" but device/IP never seen before
+        """
+
+        # Suspicious pattern 1: High-value transaction labeled "safe"
+        if label == 0 and txn.amount > 3 * txn.user_avg_amount:
+            return True
+
+        # Suspicious pattern 2: First transaction from new device labeled "safe"
+        if label == 0 and txn.is_new_device and txn.amount > 100:
+            return True
+
+        # Suspicious pattern 3: High-risk merchant labeled "safe"
+        if label == 0 and txn.merchant_risk_score > 0.8:
+            return True
+
+        return False
+
+    def compute_influence_scores(self, transactions, labels):
+        """
+        Influence function: Which samples have most impact on model?
+
+        If removing a sample drastically changes model behavior,
+        it might be a poisoned sample
+        """
+
+        from sklearn.inspection import permutation_importance
+
+        # Train model on full dataset
+        model = self.train_model(transactions, labels)
+        base_accuracy = self.evaluate(model, self.validation_set)
+
+        influence_scores = []
+
+        for i in range(len(transactions)):
+            # Leave-one-out: Remove sample i and retrain
+            txn_subset = [t for j, t in enumerate(transactions) if j != i]
+            label_subset = [l for j, l in enumerate(labels) if j != i]
+
+            model_without_i = self.train_model(txn_subset, label_subset)
+            accuracy_without_i = self.evaluate(model_without_i, self.validation_set)
+
+            # If accuracy improves without this sample, it's likely poisoned
+            influence = base_accuracy - accuracy_without_i
+            influence_scores.append(influence)
+
+        return influence_scores
+```
+
+#### Attack Vector 3: Evasion Attacks
+
+**Attack:** Fraudsters slightly modify transactions to evade detection while still committing fraud.
+
+```python
+class EvasionDefense:
+    """
+    Defend against evasion attacks
+
+    Attack: Fraudster modifies transaction to slip under detection threshold
+    Example: Split $1000 fraud into 10 × $100 transactions
+    """
+
+    def detect_evasion_patterns(self, user_transactions):
+        """
+        Detect common evasion tactics
+
+        Evasion tactics:
+        1. Amount splitting (structuring)
+        2. Time spreading (avoid velocity triggers)
+        3. Device hopping (avoid device-based rules)
+        4. Merchant diversity (avoid merchant-based patterns)
+        """
+
+        evasion_signals = {}
+
+        # Evasion tactic 1: Amount structuring
+        # Multiple transactions just below flagging threshold
+        suspicious_amounts = [
+            txn.amount for txn in user_transactions
+            if 90 <= txn.amount <= 110  # Just below $100 threshold
+        ]
+
+        if len(suspicious_amounts) >= 5:
+            evasion_signals['amount_structuring'] = {
+                'count': len(suspicious_amounts),
+                'total': sum(suspicious_amounts),
+                'suspicion_score': 0.8
+            }
+
+        # Evasion tactic 2: Time spreading
+        # Exactly one transaction per hour for 10 hours
+        # (avoiding "5 transactions in 1 hour" velocity rule)
+        time_gaps = self.compute_time_gaps(user_transactions)
+        if self.is_suspiciously_regular(time_gaps):
+            evasion_signals['time_spreading'] = {
+                'avg_gap_minutes': np.mean(time_gaps),
+                'std_gap_minutes': np.std(time_gaps),
+                'suspicion_score': 0.7
+            }
+
+        # Evasion tactic 3: Device rotation
+        # Using multiple devices to avoid "new device" flag
+        device_count = len(set(txn.device_id for txn in user_transactions))
+        if device_count >= 5 and len(user_transactions) <= 10:
+            evasion_signals['device_hopping'] = {
+                'device_count': device_count,
+                'transaction_count': len(user_transactions),
+                'suspicion_score': 0.9
+            }
+
+        return evasion_signals
+
+    def is_suspiciously_regular(self, time_gaps):
+        """
+        Detect suspiciously regular timing patterns
+
+        Real users: Irregular timing (5min, 3hr, 10min, 1day)
+        Bots: Regular timing (exactly 1hr, 1hr, 1hr, 1hr)
+        """
+
+        # Low variance in timing = suspicious
+        std_dev = np.std(time_gaps)
+        mean_gap = np.mean(time_gaps)
+
+        coefficient_of_variation = std_dev / mean_gap
+
+        # If timing is too regular (CV < 0.2), suspicious
+        return coefficient_of_variation < 0.2
+```
+
+### 2. Online Learning with Delayed Labels (30-90 Day Chargeback Problem)
+
+**Interviewer:** "Chargebacks arrive 30-90 days after the transaction. How do you handle this massive label delay?"
+
+**You:** "This is one of the hardest problems in fraud detection! Let me explain our approach:
+
+#### The Problem
+
+```
+Day 0: Transaction happens → Model predicts (fraud or legitimate)
+Day 30-90: Chargeback arrives → True label revealed
+
+Challenge:
+- Can't wait 90 days to retrain model
+- Fraudsters evolve in days, not months
+- Need to learn from recent patterns
+```
+
+#### Solution: Multi-Stage Learning Pipeline
+
+```python
+class DelayedLabelLearning:
+    """
+    Handle 30-90 day label delay in fraud detection
+
+    Strategy:
+    1. Immediate feedback: Use proxy labels (declined transactions, 2FA required)
+    2. Short-term feedback: Confirmed fraud (user reports, merchant reports)
+    3. Long-term feedback: Chargebacks (ground truth)
+
+    Timeline:
+    - Day 0: Transaction → Use last model
+    - Day 1: Retrain with proxy labels (2FA success rate, declines)
+    - Day 7: Retrain with early fraud reports
+    - Day 30-90: Retrain with chargeback data (ground truth)
+    """
+
+    def __init__(self):
+        self.proxy_label_model = ProxyLabelModel()
+        self.short_term_model = ShortTermModel()
+        self.long_term_model = LongTermModel()
+
+    def generate_proxy_labels(self, transactions):
+        """
+        Day 1: Generate proxy labels without waiting for chargebacks
+
+        Proxy labels (immediate feedback):
+        1. 2FA required → likely fraud (70% precision)
+        2. Manual review flagged → likely fraud (80% precision)
+        3. User passed 2FA → likely legitimate (95% precision)
+        4. High-risk merchant declined → likely fraud (60% precision)
+        5. Multiple velocity triggers → likely fraud (75% precision)
+        """
+
+        proxy_labels = []
+
+        for txn in transactions:
+            # Proxy label logic
+            fraud_score = 0.0
+
+            # Signal 1: 2FA was required
+            if txn.required_2fa:
+                if txn.passed_2fa:
+                    fraud_score = 0.2  # Passed auth, likely legit
+                else:
+                    fraud_score = 0.9  # Failed auth, likely fraud
+
+            # Signal 2: Manual review decision
+            if txn.manual_review_decision == 'FRAUD':
+                fraud_score = max(fraud_score, 0.85)
+            elif txn.manual_review_decision == 'LEGITIMATE':
+                fraud_score = min(fraud_score, 0.15)
+
+            # Signal 3: Velocity triggers
+            if txn.velocity_triggers >= 3:
+                fraud_score = max(fraud_score, 0.75)
+
+            # Signal 4: User reported fraud (within 24 hours)
+            if txn.user_reported_fraud:
+                fraud_score = 1.0  # Definite fraud
+
+            # Signal 5: Device risk
+            if txn.device_risk_score > 0.9:
+                fraud_score = max(fraud_score, 0.8)
+
+            proxy_labels.append({
+                'transaction_id': txn.id,
+                'proxy_fraud_score': fraud_score,
+                'confidence': self.estimate_proxy_confidence(txn),
+                'true_label': None  # Will be filled later when chargeback arrives
+            })
+
+        return proxy_labels
+
+    def confidence_weighted_training(self, transactions, proxy_labels, label_confidence):
+        """
+        Train model with confidence-weighted samples
+
+        Idea:
+        - Proxy labels are noisy (70-95% precision)
+        - Weight samples by confidence
+        - High-confidence proxy labels get more weight
+        """
+
+        from xgboost import XGBClassifier
+
+        # Prepare features
+        X = self.extract_features(transactions)
+
+        # Prepare labels (0 or 1)
+        y = [1 if score > 0.5 else 0 for score in proxy_labels]
+
+        # Sample weights = confidence scores
+        sample_weights = label_confidence
+
+        # Train with sample weights
+        model = XGBClassifier(
+            scale_pos_weight=500,  # Class imbalance
+            max_depth=6,
+            n_estimators=100
+        )
+
+        model.fit(X, y, sample_weight=sample_weights)
+
+        return model
+
+    def progressive_label_refinement(self, transactions):
+        """
+        Progressively refine labels as more feedback arrives
+
+        Timeline:
+        - Day 0: Proxy labels (70-95% accuracy)
+        - Day 7: Early fraud reports (85% accuracy)
+        - Day 30: Initial chargebacks (95% accuracy)
+        - Day 90: Final chargebacks (99% accuracy)
+        """
+
+        # Stage 1: Day 0-7 (Proxy labels)
+        proxy_labels = self.generate_proxy_labels(transactions)
+        model_v1 = self.train_model(transactions, proxy_labels, confidence='low')
+
+        # Stage 2: Day 7-30 (Early fraud reports)
+        # Some users report fraud early
+        early_reports = self.fetch_early_fraud_reports(transactions)
+        refined_labels = self.merge_labels(proxy_labels, early_reports, priority='early_reports')
+        model_v2 = self.train_model(transactions, refined_labels, confidence='medium')
+
+        # Stage 3: Day 30-90 (Chargebacks arrive)
+        chargebacks = self.fetch_chargebacks(transactions)
+        final_labels = self.merge_labels(refined_labels, chargebacks, priority='chargebacks')
+        model_v3 = self.train_model(transactions, final_labels, confidence='high')
+
+        return {
+            'day_1_model': model_v1,
+            'day_7_model': model_v2,
+            'day_30_model': model_v3
+        }
+
+    def online_learning_with_delayed_labels(self):
+        """
+        Online learning: Update model daily with best available labels
+
+        Production strategy:
+        - Retrain daily with proxy labels (immediate feedback)
+        - Retrain weekly with early reports (7-day feedback)
+        - Retrain monthly with chargebacks (30-90 day feedback)
+        - Keep 3 models in production (ensemble)
+        """
+
+        # Daily retraining
+        today_transactions = self.fetch_transactions(days_ago=0)
+        proxy_labels = self.generate_proxy_labels(today_transactions)
+
+        # Fetch older transactions that now have true labels
+        week_old_transactions = self.fetch_transactions(days_ago=7)
+        week_old_labels = self.fetch_fraud_reports(days_ago=7)
+
+        month_old_transactions = self.fetch_transactions(days_ago=30)
+        month_old_labels = self.fetch_chargebacks(days_ago=30)
+
+        # Combine all data
+        all_transactions = today_transactions + week_old_transactions + month_old_transactions
+        all_labels = proxy_labels + week_old_labels + month_old_labels
+
+        # Train model with mixed-quality labels
+        model = self.confidence_weighted_training(
+            all_transactions,
+            all_labels,
+            label_confidence=self.estimate_all_confidences(all_labels)
+        )
+
+        return model
+```
+
+#### Importance Weighting for Label Shift
+
+```python
+class ImportanceWeightedLearning:
+    """
+    Handle distribution shift between training and serving
+
+    Problem:
+    - Training data: Transactions from 30-90 days ago (old fraud patterns)
+    - Serving data: Transactions today (new fraud patterns)
+    - Distribution has shifted!
+
+    Solution: Importance weighting
+    - Upweight recent patterns
+    - Downweight old patterns
+    """
+
+    def compute_importance_weights(self, transactions, labels):
+        """
+        Compute importance weights for each training sample
+
+        Weight = P(transaction at serving time) / P(transaction at training time)
+
+        Approximation:
+        - Recent transactions (last 7 days): weight = 2.0
+        - Medium age (8-30 days): weight = 1.0
+        - Old transactions (30-90 days): weight = 0.5
+        """
+
+        import datetime
+
+        weights = []
+        today = datetime.datetime.now()
+
+        for txn in transactions:
+            age_days = (today - txn.timestamp).days
+
+            if age_days <= 7:
+                weight = 2.0  # Recent patterns, high weight
+            elif age_days <= 30:
+                weight = 1.0  # Medium age, normal weight
+            else:
+                weight = 0.5  # Old patterns, low weight
+
+            weights.append(weight)
+
+        return weights
+
+    def train_with_importance_weighting(self, transactions, labels):
+        """
+        Train model with importance weights
+        """
+
+        X = self.extract_features(transactions)
+        y = labels
+
+        # Compute importance weights (recency-based)
+        importance_weights = self.compute_importance_weights(transactions, labels)
+
+        # Also apply confidence weights (label quality)
+        confidence_weights = self.estimate_label_confidence(transactions, labels)
+
+        # Combined weights
+        final_weights = [
+            imp * conf
+            for imp, conf in zip(importance_weights, confidence_weights)
+        ]
+
+        # Train with combined weights
+        model = XGBClassifier()
+        model.fit(X, y, sample_weight=final_weights)
+
+        return model
+```
+
+### 3. Fairness Evaluation & Bias Prevention
+
+**Interviewer:** "How do you ensure your fraud detection model doesn't discriminate against certain demographic groups?"
+
+**You:** "Fairness is critical in fraud detection. Regulatory requirements and ethical obligations demand fair treatment. Here's our approach:
+
+#### Fairness Metrics
+
+```python
+class FairnessEvaluator:
+    """
+    Evaluate model fairness across demographic groups
+
+    Protected attributes (cannot use directly):
+    - Race
+    - Gender
+    - Age
+    - National origin
+    - Religion
+
+    Proxy features (can indirectly encode protected attributes):
+    - ZIP code → Race (redlining)
+    - First name → Gender
+    - Shopping patterns → Religion
+    - IP geolocation → National origin
+    """
+
+    def evaluate_fairness(self, model, test_data, protected_attribute='race'):
+        """
+        Measure fairness metrics
+
+        Key metrics:
+        1. Demographic Parity: P(decline | group A) ≈ P(decline | group B)
+        2. Equal Opportunity: P(detect fraud | fraud=true, group A) ≈ P(detect fraud | fraud=true, group B)
+        3. Equalized Odds: Both TPR and FPR are equal across groups
+        4. Calibration: P(fraud | score=0.9, group A) ≈ P(fraud | score=0.9, group B)
+        """
+
+        groups = test_data[protected_attribute].unique()
+        fairness_report = {}
+
+        for group in groups:
+            group_data = test_data[test_data[protected_attribute] == group]
+
+            predictions = model.predict(group_data)
+            true_labels = group_data['is_fraud']
+
+            # Metric 1: Decline rate (Demographic Parity)
+            decline_rate = (predictions == 1).mean()
+
+            # Metric 2: True Positive Rate (Equal Opportunity)
+            fraud_cases = group_data[group_data['is_fraud'] == 1]
+            fraud_predictions = model.predict(fraud_cases)
+            tpr = (fraud_predictions == 1).mean()
+
+            # Metric 3: False Positive Rate
+            legit_cases = group_data[group_data['is_fraud'] == 0]
+            legit_predictions = model.predict(legit_cases)
+            fpr = (legit_predictions == 1).mean()
+
+            # Metric 4: Precision
+            if predictions.sum() > 0:
+                precision = (
+                    (predictions == 1) & (true_labels == 1)
+                ).sum() / predictions.sum()
+            else:
+                precision = 0.0
+
+            fairness_report[group] = {
+                'decline_rate': decline_rate,
+                'tpr': tpr,
+                'fpr': fpr,
+                'precision': precision,
+                'sample_size': len(group_data)
+            }
+
+        # Check for fairness violations
+        violations = self.detect_fairness_violations(fairness_report)
+
+        return fairness_report, violations
+
+    def detect_fairness_violations(self, fairness_report):
+        """
+        Flag fairness violations
+
+        Thresholds (industry standard):
+        - Decline rate difference: <10% (adverse impact ratio > 0.8)
+        - TPR difference: <5%
+        - FPR difference: <5%
+        """
+
+        violations = []
+
+        # Get reference group (majority group)
+        reference_group = max(
+            fairness_report.keys(),
+            key=lambda g: fairness_report[g]['sample_size']
+        )
+
+        ref_metrics = fairness_report[reference_group]
+
+        # Check each protected group
+        for group, metrics in fairness_report.items():
+            if group == reference_group:
+                continue
+
+            # Violation 1: Adverse impact (4/5 rule)
+            # Decline rate for protected group should be >= 0.8 × decline rate for majority
+            adverse_impact_ratio = metrics['decline_rate'] / ref_metrics['decline_rate']
+            if adverse_impact_ratio < 0.8:
+                violations.append({
+                    'type': 'adverse_impact',
+                    'group': group,
+                    'ratio': adverse_impact_ratio,
+                    'group_decline_rate': metrics['decline_rate'],
+                    'reference_decline_rate': ref_metrics['decline_rate']
+                })
+
+            # Violation 2: TPR disparity
+            tpr_diff = abs(metrics['tpr'] - ref_metrics['tpr'])
+            if tpr_diff > 0.05:  # 5% threshold
+                violations.append({
+                    'type': 'tpr_disparity',
+                    'group': group,
+                    'difference': tpr_diff,
+                    'group_tpr': metrics['tpr'],
+                    'reference_tpr': ref_metrics['tpr']
+                })
+
+            # Violation 3: FPR disparity
+            fpr_diff = abs(metrics['fpr'] - ref_metrics['fpr'])
+            if fpr_diff > 0.05:
+                violations.append({
+                    'type': 'fpr_disparity',
+                    'group': group,
+                    'difference': fpr_diff,
+                    'group_fpr': metrics['fpr'],
+                    'reference_fpr': ref_metrics['fpr']
+                })
+
+        return violations
+```
+
+#### Bias Mitigation Strategies
+
+```python
+class BiasMitigation:
+    """
+    Mitigate bias in fraud detection models
+
+    Strategies:
+    1. Pre-processing: Balance training data across groups
+    2. In-processing: Fairness constraints during training
+    3. Post-processing: Adjust decision thresholds per group
+    """
+
+    def preprocess_for_fairness(self, training_data, protected_attribute='race'):
+        """
+        Pre-processing: Balance training data
+
+        Approach: Ensure equal fraud rates across groups in training
+        """
+
+        groups = training_data[protected_attribute].unique()
+        balanced_data = []
+
+        # Target fraud rate: Average across all groups
+        overall_fraud_rate = training_data['is_fraud'].mean()
+
+        for group in groups:
+            group_data = training_data[training_data[protected_attribute] == group]
+
+            # Resample to match target fraud rate
+            fraud_samples = group_data[group_data['is_fraud'] == 1]
+            legit_samples = group_data[group_data['is_fraud'] == 0]
+
+            # Calculate required samples
+            total_samples = len(group_data)
+            target_fraud_count = int(total_samples * overall_fraud_rate)
+            target_legit_count = total_samples - target_fraud_count
+
+            # Oversample/undersample
+            resampled_fraud = fraud_samples.sample(
+                n=target_fraud_count,
+                replace=(len(fraud_samples) < target_fraud_count)
+            )
+            resampled_legit = legit_samples.sample(
+                n=target_legit_count,
+                replace=(len(legit_samples) < target_legit_count)
+            )
+
+            balanced_data.append(pd.concat([resampled_fraud, resampled_legit]))
+
+        return pd.concat(balanced_data).sample(frac=1)  # Shuffle
+
+    def train_with_fairness_constraints(self, training_data):
+        """
+        In-processing: Add fairness constraints to loss function
+
+        Modified loss = Classification loss + λ × Fairness penalty
+
+        Fairness penalty: Difference in FPR across groups
+        """
+
+        import torch
+        import torch.nn as nn
+
+        class FairClassifier(nn.Module):
+            def __init__(self, input_dim, protected_groups):
+                super().__init__()
+                self.classifier = nn.Sequential(
+                    nn.Linear(input_dim, 128),
+                    nn.ReLU(),
+                    nn.Dropout(0.3),
+                    nn.Linear(128, 64),
+                    nn.ReLU(),
+                    nn.Linear(64, 1),
+                    nn.Sigmoid()
+                )
+                self.protected_groups = protected_groups
+
+            def forward(self, x, groups):
+                return self.classifier(x)
+
+            def compute_fairness_loss(self, predictions, labels, groups):
+                """
+                Fairness loss: Penalize FPR differences across groups
+                """
+
+                group_fprs = []
+
+                for group_id in self.protected_groups:
+                    group_mask = (groups == group_id)
+
+                    # False positives for this group
+                    group_legit = labels[group_mask] == 0
+                    group_legit_preds = predictions[group_mask][group_legit]
+
+                    # FPR = P(predict fraud | truly legitimate)
+                    fpr = group_legit_preds.mean()
+                    group_fprs.append(fpr)
+
+                # Fairness penalty: Variance in FPR across groups
+                fairness_penalty = torch.var(torch.stack(group_fprs))
+
+                return fairness_penalty
+
+        # Training loop with fairness
+        model = FairClassifier(input_dim=100, protected_groups=[0, 1, 2])
+        optimizer = torch.optim.Adam(model.parameters())
+
+        fairness_weight = 0.1  # λ hyperparameter
+
+        for epoch in range(100):
+            predictions = model(X_train, groups_train)
+
+            # Classification loss (BCE)
+            classification_loss = nn.BCELoss()(predictions, y_train)
+
+            # Fairness loss
+            fairness_loss = model.compute_fairness_loss(
+                predictions,
+                y_train,
+                groups_train
+            )
+
+            # Combined loss
+            total_loss = classification_loss + fairness_weight * fairness_loss
+
+            optimizer.zero_grad()
+            total_loss.backward()
+            optimizer.step()
+
+        return model
+
+    def postprocess_for_fairness(self, model, validation_data, protected_attribute='race'):
+        """
+        Post-processing: Adjust decision thresholds per group
+
+        Goal: Equalize TPR and FPR across groups
+
+        Approach:
+        - For each group, find optimal threshold that matches target TPR/FPR
+        - Different groups may have different thresholds
+        """
+
+        groups = validation_data[protected_attribute].unique()
+
+        # Target metrics (from majority group)
+        reference_group = groups[0]
+        ref_data = validation_data[validation_data[protected_attribute] == reference_group]
+        ref_predictions = model.predict_proba(ref_data)[:, 1]
+        ref_labels = ref_data['is_fraud']
+
+        # Find reference threshold that achieves target performance
+        target_tpr = 0.90
+        target_fpr = 0.05
+        ref_threshold = self.find_threshold(ref_predictions, ref_labels, target_tpr, target_fpr)
+
+        # For each group, find threshold that matches reference TPR/FPR
+        group_thresholds = {reference_group: ref_threshold}
+
+        for group in groups:
+            if group == reference_group:
+                continue
+
+            group_data = validation_data[validation_data[protected_attribute] == group]
+            group_predictions = model.predict_proba(group_data)[:, 1]
+            group_labels = group_data['is_fraud']
+
+            # Find threshold for this group that matches target TPR/FPR
+            group_threshold = self.find_threshold(
+                group_predictions,
+                group_labels,
+                target_tpr,
+                target_fpr
+            )
+
+            group_thresholds[group] = group_threshold
+
+        return group_thresholds
+
+    def find_threshold(self, predictions, labels, target_tpr, target_fpr):
+        """
+        Find threshold that achieves target TPR and FPR
+        """
+
+        from sklearn.metrics import roc_curve
+
+        fpr_curve, tpr_curve, thresholds = roc_curve(labels, predictions)
+
+        # Find threshold closest to target
+        best_threshold = 0.5
+        best_distance = float('inf')
+
+        for fpr, tpr, thresh in zip(fpr_curve, tpr_curve, thresholds):
+            distance = abs(tpr - target_tpr) + abs(fpr - target_fpr)
+
+            if distance < best_distance:
+                best_distance = distance
+                best_threshold = thresh
+
+        return best_threshold
+```
+
+### 4. Advanced Model Monitoring (Concept Drift Detection)
+
+**Interviewer:** "How do you detect when your fraud model is degrading in production?"
+
+**You:** "Model monitoring is critical in fraud detection because fraud patterns evolve rapidly. Here's our comprehensive monitoring system:
+
+```python
+class FraudModelMonitoring:
+    """
+    Production model monitoring for fraud detection
+
+    What to monitor:
+    1. Performance metrics (precision, recall, F1)
+    2. Feature drift (PSI, KS statistic)
+    3. Prediction drift (score distribution changes)
+    4. Business metrics (cost, false positive rate)
+    """
+
+    def monitor_model_performance(self):
+        """
+        Daily performance monitoring
+
+        Metrics:
+        - Precision: % of declined transactions that are actual fraud
+        - Recall: % of fraud transactions that are caught
+        - F1 score: Harmonic mean
+        - AUC-ROC: Discrimination ability
+        """
+
+        # Fetch yesterday's transactions and labels (delayed)
+        yesterday = datetime.date.today() - datetime.timedelta(days=1)
+        transactions = self.fetch_transactions(yesterday)
+        predictions = self.fetch_predictions(yesterday)
+
+        # Labels (early feedback: user reports, merchant reports)
+        # Chargebacks will arrive later (30-90 days)
+        early_labels = self.fetch_early_labels(yesterday)
+
+        # Compute metrics
+        metrics = {
+            'precision': precision_score(early_labels, predictions),
+            'recall': recall_score(early_labels, predictions),
+            'f1': f1_score(early_labels, predictions),
+            'auc_roc': roc_auc_score(early_labels, predictions)
+        }
+
+        # Check for performance degradation
+        if metrics['precision'] < 0.80:  # Target: 85%
+            self.alert('PRECISION_DROP', metrics)
+
+        if metrics['recall'] < 0.85:  # Target: 90%
+            self.alert('RECALL_DROP', metrics)
+
+        return metrics
+
+    def monitor_feature_drift(self, baseline_data, current_data):
+        """
+        Detect feature distribution drift
+
+        Methods:
+        1. PSI (Population Stability Index)
+        2. KS statistic (Kolmogorov-Smirnov)
+        3. Jensen-Shannon divergence
+        """
+
+        drift_report = {}
+
+        for feature in baseline_data.columns:
+            # Method 1: PSI (Population Stability Index)
+            psi = self.compute_psi(
+                baseline_data[feature],
+                current_data[feature]
+            )
+
+            # Method 2: KS statistic
+            ks_stat, ks_pvalue = self.compute_ks_statistic(
+                baseline_data[feature],
+                current_data[feature]
+            )
+
+            # Method 3: Jensen-Shannon divergence
+            js_div = self.compute_js_divergence(
+                baseline_data[feature],
+                current_data[feature]
+            )
+
+            drift_report[feature] = {
+                'psi': psi,
+                'ks_statistic': ks_stat,
+                'ks_pvalue': ks_pvalue,
+                'js_divergence': js_div,
+                'drift_detected': psi > 0.25 or ks_pvalue < 0.01
+            }
+
+            # Alert if significant drift
+            if drift_report[feature]['drift_detected']:
+                self.alert(f'FEATURE_DRIFT: {feature}', drift_report[feature])
+
+        return drift_report
+
+    def compute_psi(self, baseline, current, bins=10):
+        """
+        Population Stability Index (PSI)
+
+        PSI = Σ (current% - baseline%) × ln(current% / baseline%)
+
+        Interpretation:
+        - PSI < 0.1: No significant change
+        - 0.1 <= PSI < 0.25: Moderate drift (investigate)
+        - PSI >= 0.25: High drift (retrain model)
+        """
+
+        # Create bins
+        bin_edges = np.histogram_bin_edges(baseline, bins=bins)
+
+        # Compute distributions
+        baseline_dist, _ = np.histogram(baseline, bins=bin_edges)
+        current_dist, _ = np.histogram(current, bins=bin_edges)
+
+        # Normalize to percentages
+        baseline_pct = baseline_dist / baseline_dist.sum() + 1e-10  # Avoid log(0)
+        current_pct = current_dist / current_dist.sum() + 1e-10
+
+        # Compute PSI
+        psi = np.sum((current_pct - baseline_pct) * np.log(current_pct / baseline_pct))
+
+        return psi
+
+    def compute_ks_statistic(self, baseline, current):
+        """
+        Kolmogorov-Smirnov statistic
+
+        Measures maximum distance between two cumulative distributions
+
+        Returns:
+        - ks_stat: Maximum distance (0 to 1)
+        - p_value: Significance (< 0.01 means significant drift)
+        """
+
+        from scipy.stats import ks_2samp
+
+        ks_stat, p_value = ks_2samp(baseline, current)
+
+        return ks_stat, p_value
+
+    def monitor_prediction_drift(self, baseline_predictions, current_predictions):
+        """
+        Monitor fraud score distribution drift
+
+        Check if model is becoming:
+        - Too conservative (scores too high → more declines)
+        - Too lenient (scores too low → more fraud slips through)
+        """
+
+        # Compare score distributions
+        baseline_mean = np.mean(baseline_predictions)
+        current_mean = np.mean(current_predictions)
+
+        baseline_std = np.std(baseline_predictions)
+        current_std = np.std(current_predictions)
+
+        # Check for significant mean shift
+        mean_shift = current_mean - baseline_mean
+        mean_shift_pct = (mean_shift / baseline_mean) * 100
+
+        if abs(mean_shift_pct) > 20:  # 20% change in average score
+            self.alert('PREDICTION_DRIFT', {
+                'baseline_mean': baseline_mean,
+                'current_mean': current_mean,
+                'shift_pct': mean_shift_pct
+            })
+
+        return {
+            'baseline_mean': baseline_mean,
+            'current_mean': current_mean,
+            'baseline_std': baseline_std,
+            'current_std': current_std,
+            'mean_shift_pct': mean_shift_pct
+        }
+```
+
+---
+
+---
 
 **You:** "To summarize the Fraud Detection system design:
 

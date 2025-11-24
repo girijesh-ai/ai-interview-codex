@@ -2084,6 +2084,1149 @@ This design demonstrates understanding of:
 
 ---
 
+## Staff-Level Deep Dives
+
+### Feature Drift Detection & Monitoring
+
+**Interviewer:** "How do you detect when model features start degrading in production?"
+
+**You:** "Feature drift is a critical problem in feed ranking. Let me explain our detection and mitigation strategies:
+
+#### Problem: Feature Drift
+
+```
+Scenario:
+- Model trained on Jan 2025 data
+- Deployed to production in Feb 2025
+- By Apr 2025, feature distributions have shifted
+
+Examples of drift:
+- User behavior changes (more video, less text)
+- Platform changes (new content types added)
+- Seasonal shifts (holidays, events)
+- Adversarial behavior (spam tactics evolve)
+```
+
+#### Feature Drift Detection System
+
+```python
+class FeatureDriftDetector:
+    """
+    Monitor feature distributions and detect significant drift
+
+    Methods:
+    1. Population Stability Index (PSI)
+    2. Kolmogorov-Smirnov (KS) Test
+    3. Jensen-Shannon Divergence
+    4. Prediction drift (predicted vs actual distribution)
+    """
+
+    def __init__(self):
+        # Store baseline feature distributions from training data
+        self.baseline_distributions = {}
+
+        # Drift thresholds
+        self.psi_threshold = 0.25  # High drift if PSI > 0.25
+        self.ks_threshold = 0.1    # High drift if KS stat > 0.1
+
+    def compute_psi(self, baseline: np.ndarray, current: np.ndarray, bins: int = 10):
+        """
+        Population Stability Index
+
+        PSI = Σ (current% - baseline%) × ln(current% / baseline%)
+
+        Interpretation:
+        - PSI < 0.1: No significant change
+        - 0.1 <= PSI < 0.25: Moderate drift (investigate)
+        - PSI >= 0.25: High drift (retrain model)
+        """
+
+        # Create bins
+        bin_edges = np.histogram_bin_edges(baseline, bins=bins)
+
+        # Compute distributions
+        baseline_dist, _ = np.histogram(baseline, bins=bin_edges)
+        current_dist, _ = np.histogram(current, bins=bin_edges)
+
+        # Normalize to percentages
+        baseline_pct = baseline_dist / baseline_dist.sum()
+        current_pct = current_dist / current_dist.sum()
+
+        # Avoid division by zero
+        baseline_pct = np.where(baseline_pct == 0, 0.0001, baseline_pct)
+        current_pct = np.where(current_pct == 0, 0.0001, current_pct)
+
+        # Compute PSI
+        psi = np.sum(
+            (current_pct - baseline_pct) * np.log(current_pct / baseline_pct)
+        )
+
+        return psi
+
+    def compute_ks_statistic(self, baseline: np.ndarray, current: np.ndarray):
+        """
+        Kolmogorov-Smirnov test
+
+        Measures maximum distance between CDFs
+
+        Returns:
+        - KS statistic: Max distance (0 to 1)
+        - p-value: Probability distributions are same
+        """
+
+        from scipy import stats
+
+        ks_stat, p_value = stats.ks_2samp(baseline, current)
+
+        return ks_stat, p_value
+
+    def detect_drift(self, feature_name: str, current_values: np.ndarray):
+        """
+        Detect if feature has drifted significantly
+
+        Returns drift report with severity and recommended action
+        """
+
+        # Get baseline distribution
+        baseline = self.baseline_distributions[feature_name]
+
+        # Compute drift metrics
+        psi = self.compute_psi(baseline, current_values)
+        ks_stat, p_value = self.compute_ks_statistic(baseline, current_values)
+
+        # Determine severity
+        if psi >= 0.25 or ks_stat >= 0.1:
+            severity = "HIGH"
+            action = "RETRAIN_IMMEDIATELY"
+        elif psi >= 0.1 or ks_stat >= 0.05:
+            severity = "MEDIUM"
+            action = "INVESTIGATE"
+        else:
+            severity = "LOW"
+            action = "MONITOR"
+
+        return {
+            'feature': feature_name,
+            'psi': psi,
+            'ks_statistic': ks_stat,
+            'ks_p_value': p_value,
+            'severity': severity,
+            'action': action,
+            'baseline_mean': baseline.mean(),
+            'current_mean': current_values.mean(),
+            'baseline_std': baseline.std(),
+            'current_std': current_values.std()
+        }
+
+    def monitor_all_features(self, current_feature_batch: Dict[str, np.ndarray]):
+        """
+        Monitor all features and generate drift report
+
+        Run every hour in production
+        """
+
+        drift_report = []
+
+        for feature_name, current_values in current_feature_batch.items():
+            if feature_name in self.baseline_distributions:
+                drift_info = self.detect_drift(feature_name, current_values)
+                drift_report.append(drift_info)
+
+        # Alert if high drift detected
+        high_drift_features = [
+            f for f in drift_report if f['severity'] == 'HIGH'
+        ]
+
+        if high_drift_features:
+            self.send_alert(
+                severity='CRITICAL',
+                message=f"High drift detected in {len(high_drift_features)} features",
+                features=high_drift_features
+            )
+
+        return drift_report
+
+
+class PredictionDriftMonitor:
+    """
+    Monitor model prediction distributions
+
+    Complementary to feature drift: Even if features drift,
+    predictions might stay calibrated
+    """
+
+    def __init__(self):
+        self.baseline_prediction_dist = None
+
+    def monitor_prediction_drift(self, predictions: np.ndarray):
+        """
+        Check if prediction distribution has shifted
+
+        Example:
+        - Training: P(like) ~ Normal(0.12, 0.05)
+        - Production: P(like) ~ Normal(0.08, 0.03)
+        - Indicates model is predicting lower engagement
+        """
+
+        if self.baseline_prediction_dist is None:
+            # First run, set baseline
+            self.baseline_prediction_dist = predictions
+            return {'status': 'BASELINE_SET'}
+
+        # Compute drift
+        js_divergence = self.jensen_shannon_divergence(
+            self.baseline_prediction_dist,
+            predictions
+        )
+
+        # Check calibration
+        calibration_error = self.compute_calibration_error(predictions)
+
+        # Determine action
+        if js_divergence > 0.1 or calibration_error > 0.05:
+            action = "RETRAIN"
+        else:
+            action = "MONITOR"
+
+        return {
+            'js_divergence': js_divergence,
+            'calibration_error': calibration_error,
+            'action': action
+        }
+
+    def jensen_shannon_divergence(self, p: np.ndarray, q: np.ndarray):
+        """
+        Jensen-Shannon Divergence: Symmetric measure of distribution difference
+
+        JSD(P || Q) = 0.5 × KL(P || M) + 0.5 × KL(Q || M)
+        where M = 0.5 × (P + Q)
+        """
+
+        # Bin distributions
+        bins = np.linspace(0, 1, 20)
+        p_hist, _ = np.histogram(p, bins=bins, density=True)
+        q_hist, _ = np.histogram(q, bins=bins, density=True)
+
+        # Normalize
+        p_hist = p_hist / p_hist.sum()
+        q_hist = q_hist / q_hist.sum()
+
+        # Compute M
+        m = 0.5 * (p_hist + q_hist)
+
+        # KL divergences
+        kl_pm = self.kl_divergence(p_hist, m)
+        kl_qm = self.kl_divergence(q_hist, m)
+
+        # JSD
+        jsd = 0.5 * kl_pm + 0.5 * kl_qm
+
+        return jsd
+
+    def kl_divergence(self, p, q):
+        """KL(P || Q) = Σ P(i) log(P(i) / Q(i))"""
+        p = np.where(p == 0, 1e-10, p)
+        q = np.where(q == 0, 1e-10, q)
+        return np.sum(p * np.log(p / q))
+```
+
+### A/B Testing Framework with Detailed Statistical Analysis
+
+**Interviewer:** "How do you design A/B tests for feed ranking changes?"
+
+**You:** "Feed ranking A/B tests require careful design due to network effects and long-term impacts:
+
+#### Challenge: Network Effects in Feed Ranking
+
+```
+Problem: User interactions affect other users' feeds
+
+Example:
+- User A in treatment group sees better content
+- User A engages more (likes, comments)
+- User A's friends (in control group) see more from User A
+- Control group contaminated by treatment group's behavior
+
+Solution: User-level randomization + ego network clustering
+```
+
+#### Advanced A/B Testing Framework
+
+```python
+class FeedRankingABTest:
+    """
+    A/B testing framework for feed ranking with network effect mitigation
+    """
+
+    def __init__(self):
+        self.experiments = {}
+        self.social_graph = SocialGraph()
+
+    def create_experiment(self,
+                         name: str,
+                         treatment_model: str,
+                         control_model: str,
+                         traffic_split: float = 0.05,
+                         duration_days: int = 14):
+        """
+        Create new experiment with network-aware randomization
+
+        Args:
+            name: Experiment identifier
+            treatment_model: New model to test
+            control_model: Baseline model
+            traffic_split: % of users in treatment (5% default)
+            duration_days: How long to run experiment
+        """
+
+        experiment = {
+            'id': self.generate_experiment_id(name),
+            'name': name,
+            'treatment_model': treatment_model,
+            'control_model': control_model,
+            'traffic_split': traffic_split,
+            'duration_days': duration_days,
+            'start_date': datetime.now(),
+
+            # Metrics to track
+            'primary_metrics': [
+                'engagement_rate',
+                'session_time',
+                'dau'
+            ],
+
+            'secondary_metrics': [
+                'retention_7day',
+                'posts_created',
+                'shares_count'
+            ],
+
+            'guardrail_metrics': [
+                'hide_rate',
+                'report_rate',
+                'unfollow_rate',
+                'p95_latency'
+            ],
+
+            # Statistical parameters
+            'confidence_level': 0.95,
+            'minimum_detectable_effect': 0.002,  # 0.2% lift
+            'power': 0.80
+        }
+
+        # Assign users with network clustering
+        experiment['user_assignments'] = self.assign_users_network_aware(
+            traffic_split=traffic_split
+        )
+
+        self.experiments[experiment['id']] = experiment
+        return experiment
+
+    def assign_users_network_aware(self, traffic_split: float):
+        """
+        Assign users to treatment/control minimizing network contamination
+
+        Strategy: Cluster users by social graph, assign clusters not individuals
+        """
+
+        # Detect communities in social graph
+        communities = self.social_graph.detect_communities()
+
+        # Randomly assign communities to treatment/control
+        assignments = {}
+        treatment_size = 0
+        total_users = len(self.social_graph.users)
+
+        # Shuffle communities
+        import random
+        random.shuffle(communities)
+
+        for community in communities:
+            # Stop when reached target split
+            if treatment_size / total_users >= traffic_split:
+                variant = 'control'
+            else:
+                variant = 'treatment'
+                treatment_size += len(community.users)
+
+            # Assign all users in community to same variant
+            for user_id in community.users:
+                assignments[user_id] = variant
+
+        return assignments
+
+    def calculate_sample_size(self,
+                             baseline_metric: float,
+                             mde: float = 0.002,
+                             alpha: float = 0.05,
+                             power: float = 0.80):
+        """
+        Calculate required sample size for statistical significance
+
+        Args:
+            baseline_metric: Current engagement rate (e.g., 0.12 = 12%)
+            mde: Minimum detectable effect (0.002 = 0.2% absolute lift)
+            alpha: False positive rate (5%)
+            power: Statistical power (80%)
+
+        Returns:
+            Required users per variant
+        """
+
+        from scipy import stats
+
+        # Z-scores
+        z_alpha = stats.norm.ppf(1 - alpha/2)  # Two-tailed
+        z_beta = stats.norm.ppf(power)
+
+        # Effect size
+        p1 = baseline_metric
+        p2 = baseline_metric + mde
+
+        # Pooled variance
+        p_pooled = (p1 + p2) / 2
+
+        # Sample size formula
+        n = (
+            (z_alpha + z_beta) ** 2 * 2 * p_pooled * (1 - p_pooled)
+            / (p2 - p1) ** 2
+        )
+
+        return int(np.ceil(n))
+
+    def analyze_experiment(self, experiment_id: str):
+        """
+        Comprehensive experiment analysis with multiple statistical tests
+
+        Returns:
+        - Primary metric results (engagement, time spent, DAU)
+        - Secondary metric results
+        - Guardrail checks
+        - Statistical significance
+        - Recommendation (SHIP, REJECT, CONTINUE)
+        """
+
+        experiment = self.experiments[experiment_id]
+
+        # Collect data
+        control_data = self.get_experiment_data(experiment_id, 'control')
+        treatment_data = self.get_experiment_data(experiment_id, 'treatment')
+
+        results = {
+            'primary_metrics': {},
+            'secondary_metrics': {},
+            'guardrails': {},
+            'overall_recommendation': None
+        }
+
+        # Analyze primary metrics
+        for metric in experiment['primary_metrics']:
+            analysis = self.analyze_metric(
+                metric,
+                control_data[metric],
+                treatment_data[metric]
+            )
+            results['primary_metrics'][metric] = analysis
+
+        # Analyze secondary metrics
+        for metric in experiment['secondary_metrics']:
+            analysis = self.analyze_metric(
+                metric,
+                control_data[metric],
+                treatment_data[metric]
+            )
+            results['secondary_metrics'][metric] = analysis
+
+        # Check guardrails
+        for metric in experiment['guardrail_metrics']:
+            passed = self.check_guardrail(
+                metric,
+                control_data[metric],
+                treatment_data[metric]
+            )
+            results['guardrails'][metric] = passed
+
+        # Overall recommendation
+        results['overall_recommendation'] = self.compute_recommendation(results)
+
+        return results
+
+    def analyze_metric(self, metric_name: str, control: np.ndarray, treatment: np.ndarray):
+        """
+        Detailed statistical analysis for a single metric
+
+        Tests:
+        1. T-test for mean difference
+        2. Mann-Whitney U test (non-parametric)
+        3. Bootstrap confidence intervals
+        """
+
+        from scipy import stats
+
+        # Basic statistics
+        control_mean = control.mean()
+        treatment_mean = treatment.mean()
+        lift = (treatment_mean - control_mean) / control_mean
+
+        # T-test
+        t_stat, t_pvalue = stats.ttest_ind(treatment, control)
+
+        # Mann-Whitney U test (non-parametric alternative)
+        u_stat, u_pvalue = stats.mannwhitneyu(treatment, control, alternative='two-sided')
+
+        # Bootstrap confidence interval
+        ci_lower, ci_upper = self.bootstrap_confidence_interval(
+            control, treatment, n_bootstrap=10000
+        )
+
+        # Statistical significance
+        is_significant = t_pvalue < 0.05
+
+        # Practical significance (meets minimum detectable effect)
+        is_practically_significant = abs(lift) >= 0.002
+
+        return {
+            'control_mean': control_mean,
+            'treatment_mean': treatment_mean,
+            'absolute_lift': treatment_mean - control_mean,
+            'relative_lift': lift,
+            't_statistic': t_stat,
+            't_pvalue': t_pvalue,
+            'u_pvalue': u_pvalue,
+            'confidence_interval': (ci_lower, ci_upper),
+            'statistically_significant': is_significant,
+            'practically_significant': is_practically_significant,
+            'sample_size_control': len(control),
+            'sample_size_treatment': len(treatment)
+        }
+
+    def bootstrap_confidence_interval(self, control, treatment, n_bootstrap=10000):
+        """
+        Bootstrap 95% confidence interval for lift
+
+        Method:
+        1. Resample control and treatment with replacement
+        2. Compute lift for each resample
+        3. Find 2.5th and 97.5th percentiles
+        """
+
+        lifts = []
+
+        for _ in range(n_bootstrap):
+            # Resample
+            control_sample = np.random.choice(control, size=len(control), replace=True)
+            treatment_sample = np.random.choice(treatment, size=len(treatment), replace=True)
+
+            # Compute lift
+            lift = (treatment_sample.mean() - control_sample.mean()) / control_sample.mean()
+            lifts.append(lift)
+
+        # Confidence interval
+        ci_lower = np.percentile(lifts, 2.5)
+        ci_upper = np.percentile(lifts, 97.5)
+
+        return ci_lower, ci_upper
+
+    def check_guardrail(self, metric_name: str, control, treatment):
+        """
+        Check if guardrail metric stayed within acceptable bounds
+
+        Guardrails should NOT degrade significantly
+        """
+
+        control_mean = control.mean()
+        treatment_mean = treatment.mean()
+
+        # For negative metrics (hide_rate, report_rate), treatment should be ≤ control
+        negative_metrics = ['hide_rate', 'report_rate', 'unfollow_rate', 'p95_latency']
+
+        if metric_name in negative_metrics:
+            # Treatment should not significantly increase
+            degraded = treatment_mean > control_mean * 1.05  # Allow 5% tolerance
+        else:
+            # Treatment should not significantly decrease
+            degraded = treatment_mean < control_mean * 0.95
+
+        return not degraded
+
+    def compute_recommendation(self, results):
+        """
+        Overall experiment recommendation based on all metrics
+
+        Logic:
+        - SHIP: Primary metrics win + guardrails pass
+        - REJECT: Primary metrics lose OR guardrails fail
+        - CONTINUE: Inconclusive, need more data
+        """
+
+        # Check primary metrics
+        primary_wins = sum(
+            1 for analysis in results['primary_metrics'].values()
+            if analysis['statistically_significant'] and analysis['relative_lift'] > 0
+        )
+
+        # Check guardrails
+        guardrails_pass = all(results['guardrails'].values())
+
+        # Decision
+        total_primary = len(results['primary_metrics'])
+
+        if primary_wins >= total_primary * 0.67 and guardrails_pass:
+            return "SHIP: Treatment wins on primary metrics and guardrails pass"
+        elif guardrails_pass == False:
+            return "REJECT: Guardrails violated"
+        elif primary_wins == 0:
+            return "REJECT: No significant wins on primary metrics"
+        else:
+            return "CONTINUE: Inconclusive, extend experiment duration"
+```
+
+### Cold Start Problem: New Users & New Posts
+
+**Interviewer:** "How do you rank content for brand new users with no history?"
+
+**You:** "Cold start is a major challenge in feed ranking. Let me detail our multi-faceted approach:
+
+#### Cold Start Scenarios
+
+```
+1. New User (no engagement history)
+   - Can't use collaborative filtering
+   - Can't use personalized features
+
+2. New Post (no engagement data)
+   - Can't use engagement-based features
+   - Can't use social proof signals
+
+3. New Content Creator
+   - Limited creator history
+   - Bootstrapping problem
+```
+
+#### Solution: Multi-Strategy Approach
+
+```python
+class ColdStartHandler:
+    """
+    Handle cold start for new users and new posts
+    """
+
+    def __init__(self):
+        self.demographic_model = DemographicModel()
+        self.content_based_model = ContentBasedModel()
+        self.popular_posts_cache = PopularPostsCache()
+
+    def rank_for_new_user(self, user_id: str, candidate_posts: List[Post]):
+        """
+        Rank posts for user with no history
+
+        Strategies:
+        1. Demographic-based (age, location, gender)
+        2. Popular posts (high engagement overall)
+        3. Exploration (sample from diverse content)
+        4. Onboarding interests (if user selected during signup)
+        """
+
+        # Get user demographics
+        user_demo = self.get_user_demographics(user_id)
+
+        # Strategy 1: Demographic-based ranking
+        # Users similar in age/location tend to like similar content
+        demographic_scores = self.demographic_model.predict(
+            user_demo,
+            candidate_posts
+        )
+
+        # Strategy 2: Global popularity
+        # New users tend to engage with generally popular content
+        popularity_scores = np.array([
+            post.engagement_score for post in candidate_posts
+        ])
+
+        # Strategy 3: Onboarding interests (if available)
+        if user_demo.get('onboarding_interests'):
+            interest_scores = self.score_by_interests(
+                user_demo['onboarding_interests'],
+                candidate_posts
+            )
+        else:
+            interest_scores = np.zeros(len(candidate_posts))
+
+        # Combine scores
+        final_scores = (
+            0.3 * demographic_scores +
+            0.5 * popularity_scores +
+            0.2 * interest_scores
+        )
+
+        # Add exploration: 20% random sampling
+        top_80_pct = int(len(candidate_posts) * 0.8)
+        ranked_posts = sorted(
+            zip(candidate_posts, final_scores),
+            key=lambda x: x[1],
+            reverse=True
+        )
+
+        # Top 80% from ranking, bottom 20% from random exploration
+        selected_posts = [p for p, _ in ranked_posts[:top_80_pct]]
+
+        exploration_pool = [p for p, _ in ranked_posts[top_80_pct:]]
+        if exploration_pool:
+            num_explore = min(len(exploration_pool), int(len(candidate_posts) * 0.2))
+            selected_posts.extend(random.sample(exploration_pool, num_explore))
+
+        return selected_posts
+
+    def rank_new_post(self, post: Post, target_users: List[str]):
+        """
+        Rank new post (no engagement history) for users
+
+        Strategies:
+        1. Content-based features (topic, keywords, media type)
+        2. Creator history (if creator has posted before)
+        3. Transfer learning (similar posts' engagement)
+        """
+
+        # Content-based features
+        post_embedding = self.content_based_model.encode(post)
+
+        # Creator history (if available)
+        creator_stats = self.get_creator_stats(post.creator_id)
+
+        scores = {}
+
+        for user_id in target_users:
+            # Get user embedding
+            user_embedding = self.get_user_embedding(user_id)
+
+            # Content similarity
+            content_similarity = self.cosine_similarity(
+                user_embedding,
+                post_embedding
+            )
+
+            # Creator affinity (if user has engaged with this creator before)
+            creator_affinity = self.get_creator_affinity(user_id, post.creator_id)
+
+            # Combine
+            score = (
+                0.6 * content_similarity +
+                0.4 * creator_affinity
+            )
+
+            # Boost for high-quality creators
+            if creator_stats['avg_engagement_rate'] > 0.15:
+                score *= 1.2
+
+            scores[user_id] = score
+
+        return scores
+
+
+class DemographicModel:
+    """
+    Predict engagement based on user demographics
+
+    Features:
+    - Age group (18-24, 25-34, 35-44, 45-54, 55+)
+    - Location (city, country)
+    - Gender
+    - Device type
+    - Time of day
+
+    Approach: Train model on users with history, apply to new users
+    """
+
+    def __init__(self):
+        self.model = self.load_model()
+        self.scaler = self.load_scaler()
+
+    def predict(self, user_demo: Dict, posts: List[Post]):
+        """
+        Predict engagement likelihood based on demographics
+
+        Returns:
+            Scores for each post
+        """
+
+        features = []
+
+        for post in posts:
+            # User-post demographic features
+            feat = self.extract_features(user_demo, post)
+            features.append(feat)
+
+        # Batch predict
+        features = np.array(features)
+        features = self.scaler.transform(features)
+
+        scores = self.model.predict_proba(features)[:, 1]  # P(engage)
+
+        return scores
+
+    def extract_features(self, user_demo, post):
+        """
+        Extract demographic-based features
+
+        Examples:
+        - Age 25-34 + Tech post → High engagement
+        - Age 55+ + Sports post → Medium engagement
+        - Evening + Video post → High engagement
+        """
+
+        features = []
+
+        # Age-based
+        age_group = user_demo.get('age_group', 'unknown')
+        features.append(self.age_group_encoding[age_group])
+
+        # Location-based
+        location = user_demo.get('location', 'US')
+        features.append(self.location_encoding.get(location, 0))
+
+        # Time-based
+        hour = datetime.now().hour
+        features.append(hour)
+        features.append(int(hour >= 18 and hour <= 22))  # Prime time
+
+        # Post type
+        features.append(int(post.media_type == 'video'))
+        features.append(int(post.media_type == 'image'))
+
+        # Post topic match (if user selected interests during onboarding)
+        if 'onboarding_interests' in user_demo:
+            topic_match = int(post.topic in user_demo['onboarding_interests'])
+            features.append(topic_match)
+        else:
+            features.append(0)
+
+        return features
+
+
+class TransferLearningForColdStart:
+    """
+    Use transfer learning to bootstrap new posts
+
+    Idea: Similar posts (by content) should have similar engagement
+    """
+
+    def __init__(self):
+        self.post_embeddings = {}  # post_id → embedding
+        self.post_engagement = {}  # post_id → engagement_rate
+
+    def predict_engagement(self, new_post: Post):
+        """
+        Predict engagement for new post using similar posts
+
+        Steps:
+        1. Encode new post to embedding
+        2. Find k nearest neighbors in embedding space
+        3. Average their engagement rates
+        """
+
+        # Encode new post
+        new_embedding = self.encode_post(new_post)
+
+        # Find similar posts
+        similar_posts = self.find_similar_posts(new_embedding, k=100)
+
+        # Predict engagement as weighted average of similar posts
+        weights = []
+        engagements = []
+
+        for post_id, similarity in similar_posts:
+            if post_id in self.post_engagement:
+                weights.append(similarity)
+                engagements.append(self.post_engagement[post_id])
+
+        if not engagements:
+            # Fallback: use global average
+            return self.global_avg_engagement
+
+        # Weighted average
+        predicted_engagement = np.average(engagements, weights=weights)
+
+        return predicted_engagement
+
+    def find_similar_posts(self, embedding, k=100):
+        """
+        Find k most similar posts by embedding similarity
+
+        Uses FAISS for efficient ANN search
+        """
+
+        import faiss
+
+        # Search in FAISS index
+        distances, indices = self.faiss_index.search(
+            embedding.reshape(1, -1),
+            k=k
+        )
+
+        # Convert distances to similarities
+        similarities = 1 / (1 + distances[0])
+
+        similar_posts = [
+            (self.index_to_post_id[idx], sim)
+            for idx, sim in zip(indices[0], similarities)
+        ]
+
+        return similar_posts
+```
+
+### Causal Inference for Feature Impact
+
+**Interviewer:** "How do you measure the causal impact of a feature on engagement?"
+
+**You:** "Causal inference is critical for understanding what actually drives engagement vs what's just correlated:
+
+#### Problem: Correlation ≠ Causation
+
+```
+Observation: Posts with high follower count get more engagement
+
+Correlation interpretation: Follower count → Engagement
+(Wrong! Confounding variable: content quality)
+
+Causal interpretation: Quality content → Both (follower count AND engagement)
+```
+
+#### Causal Inference Framework
+
+```python
+class CausalFeatureAnalysis:
+    """
+    Measure causal impact of features on engagement
+
+    Methods:
+    1. Randomized experiments (gold standard)
+    2. Propensity score matching
+    3. Instrumental variables
+    4. Regression discontinuity
+    """
+
+    def __init__(self):
+        self.historical_experiments = {}
+
+    def measure_feature_impact_rct(self, feature_name: str):
+        """
+        Randomized Controlled Trial (RCT) for feature impact
+
+        Example: Does showing "posted 2 hours ago" increase engagement?
+
+        Design:
+        - Treatment: Show timestamp
+        - Control: Don't show timestamp
+        - Measure: Engagement rate difference
+        """
+
+        # Run experiment
+        experiment_id = self.run_feature_experiment(
+            feature_name=feature_name,
+            treatment='show',
+            control='hide',
+            duration_days=7
+        )
+
+        # Analyze results
+        control_engagement = self.get_experiment_metric(experiment_id, 'control', 'engagement_rate')
+        treatment_engagement = self.get_experiment_metric(experiment_id, 'treatment', 'engagement_rate')
+
+        # Causal effect (ATE: Average Treatment Effect)
+        ate = treatment_engagement.mean() - control_engagement.mean()
+
+        # Confidence interval
+        from scipy import stats
+        ci = stats.t.interval(
+            0.95,
+            len(treatment_engagement) - 1,
+            loc=ate,
+            scale=stats.sem(treatment_engagement - control_engagement[:len(treatment_engagement)])
+        )
+
+        return {
+            'feature': feature_name,
+            'average_treatment_effect': ate,
+            'confidence_interval_95': ci,
+            'control_mean': control_engagement.mean(),
+            'treatment_mean': treatment_engagement.mean()
+        }
+
+    def measure_feature_impact_observational(self,
+                                            feature_name: str,
+                                            outcome: str = 'engagement_rate'):
+        """
+        Measure feature impact from observational data using propensity score matching
+
+        When RCT not possible, use statistical methods to simulate randomization
+
+        Steps:
+        1. Estimate propensity scores (probability of treatment given covariates)
+        2. Match treated and control units with similar propensity scores
+        3. Compute treatment effect on matched pairs
+        """
+
+        # Get historical data
+        data = self.get_historical_data(feature_name, outcome)
+
+        # Estimate propensity scores
+        propensity_model = self.fit_propensity_model(data)
+        data['propensity'] = propensity_model.predict_proba(data[self.covariates])[:, 1]
+
+        # Match treated and control units
+        matched_pairs = self.propensity_score_matching(data)
+
+        # Compute treatment effect on matched sample
+        ate = self.compute_ate_on_matched(matched_pairs, outcome)
+
+        return {
+            'feature': feature_name,
+            'average_treatment_effect': ate,
+            'method': 'propensity_score_matching',
+            'num_matched_pairs': len(matched_pairs)
+        }
+
+    def propensity_score_matching(self, data, caliper=0.01):
+        """
+        Match treated units to similar control units
+
+        Caliper: Maximum allowed difference in propensity scores
+        """
+
+        treated = data[data['treatment'] == 1]
+        control = data[data['treatment'] == 0]
+
+        matched_pairs = []
+
+        for _, treated_unit in treated.iterrows():
+            # Find control unit with closest propensity score
+            control['distance'] = abs(control['propensity'] - treated_unit['propensity'])
+
+            closest_control = control.loc[control['distance'].idxmin()]
+
+            # Check if within caliper
+            if closest_control['distance'] <= caliper:
+                matched_pairs.append({
+                    'treated': treated_unit,
+                    'control': closest_control
+                })
+
+                # Remove matched control to avoid reuse
+                control = control.drop(closest_control.name)
+
+        return matched_pairs
+```
+
+### Long-Term Maintenance & Retraining
+
+**You:** "Feed ranking models degrade quickly without retraining:
+
+#### Model Retraining Schedule
+
+```
+Multi-Task Ranking Model:
+- Retrain: Daily (user behavior changes fast)
+- Training data: Last 7 days (recent data most relevant)
+- Training time: 6 hours on 64 GPUs
+- Validation: Offline NDCG + online A/B test
+- Deployment: Canary rollout (5% → 10% → 25% → 50% → 100%)
+
+Light Ranker (Distilled Model):
+- Retrain: Weekly (more stable, cheaper to retrain)
+- Training data: Last 30 days
+- Distillation from heavy ranker
+- Validation: Interleaving experiment
+
+Content Classifiers (Clickbait, NSFW, Misinformation):
+- Retrain: Bi-weekly (adversaries evolve tactics)
+- Training data: Human-labeled examples + active learning
+- Validation: Precision/recall on test set
+
+Feature Embeddings:
+- User embeddings: Daily (user interests shift)
+- Post embeddings: Real-time (pre-computed for each post)
+- Creator embeddings: Weekly (creator behavior stable)
+```
+
+#### When to Re-architect
+
+```
+Signals for major system changes:
+
+1. Latency SLO violated consistently (p95 >300ms for >7 days)
+   → Investigate: Model too heavy? Need better caching?
+
+2. Engagement plateau (no improvement for 3+ months)
+   → Consider: New model architecture, more data sources
+
+3. Cold start problem worsening (new user engagement <50% of avg)
+   → Improve: Better demographic models, onboarding flow
+
+4. Cost growing faster than value (>$50K/day for inference)
+   → Optimize: Model quantization, edge deployment, cheaper hardware
+
+5. New modality (e.g., addition of Reels, Stories)
+   → Re-architect: Multi-modal ranking, separate models per type
+```
+
+### Organizational Context
+
+**You:** "Feed ranking requires large cross-functional team:
+
+#### Team Structure
+
+```
+Core Ranking Team (20 engineers):
+- 6 ML Engineers: Ranking models, multi-task learning, embeddings
+- 5 Backend Engineers: Serving infrastructure, caching, APIs
+- 4 Data Engineers: Feature pipelines, training data, ETL
+- 3 ML Infra Engineers: Model serving, GPU optimization
+- 1 Staff Engineer: Technical lead, architecture
+- 1 Engineering Manager: Team management, roadmap
+
+Partner Teams:
+- Content Understanding: NSFW detection, topic classification
+- Integrity: Misinformation, clickbait, spam detection
+- Ads Ranking: Ad auction integration
+- User Growth: New user experience, onboarding
+- Data Science: A/B testing, metrics, experimentation
+
+On-Call:
+- 24/7 on-call (feeds are core product)
+- Rotation: 1 week shifts, 6 engineers
+- Escalation: Staff engineer → EM → Director → VP
+```
+
+#### Cross-Functional Trade-offs
+
+**You:** "Common conflicts:
+
+**Product wants:**
+- More viral content (higher engagement short-term)
+- Solution: Boost viral posts in ranking
+
+**Integrity team wants:**
+- Less viral content (often low-quality, clickbait)
+- Solution: Quality penalties in scoring
+
+**Resolution:**
+- Balanced objective: 0.4 × engagement + 0.3 × time_spent + 0.3 × quality_score
+- Quality score includes: clickbait penalty, misinformation penalty, original content boost
+- A/B test shows 3% engagement drop but 8% improvement in 30-day retention
+- Decision: Ship (long-term value > short-term engagement)
+
+**Ads team wants:**
+- 15% ad load (more revenue)
+- Ranking team concerns: User experience degradation
+
+**Resolution:**
+- Compromise: 12% ad load (current)
+- A/B test: 15% ad load → 5% decrease in session time
+- Economic analysis: Revenue gain ($50M/year) < user churn cost ($200M/year)
+- Decision: Keep 12% ad load
+
+---
+
 ## Sources
 
 - [How machine learning powers Facebook's News Feed ranking algorithm](https://engineering.fb.com/2021/01/26/core-infra/news-feed-ranking/)
