@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Self-Attention Visualization</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 2rem;
+            color: #fff;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .subtitle {
+            text-align: center;
+            font-size: 1.2rem;
+            margin-bottom: 2rem;
+            opacity: 0.9;
+        }
+
+        .demo-section {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .input-section {
+            margin-bottom: 2rem;
+        }
+
+        label {
+            display: block;
+            font-size: 1.1rem;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 1rem;
+            font-size: 1.1rem;
+            border: none;
+            border-radius: 10px;
+            background: rgba(255,255,255,0.9);
+            color: #333;
+            transition: all 0.3s ease;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(255,255,255,0.5);
+            transform: scale(1.02);
+        }
+
+        .tokens-display {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            margin-bottom: 2rem;
+        }
+
+        .token {
+            padding: 1rem 1.5rem;
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            border-radius: 10px;
+            font-size: 1.2rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+
+        .token:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+        }
+
+        .token.selected {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            transform: scale(1.1);
+        }
+
+        .attention-matrix {
+            display: grid;
+            gap: 4px;
+            margin: 2rem 0;
+            justify-content: center;
+        }
+
+        .attention-row {
+            display: flex;
+            gap: 4px;
+        }
+
+        .attention-cell {
+            width: 60px;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+
+        .attention-cell:hover {
+            transform: scale(1.1);
+            z-index: 10;
+        }
+
+        .explanation {
+            background: rgba(255,255,255,0.15);
+            padding: 1.5rem;
+            border-radius: 15px;
+            margin-top: 2rem;
+            border-left: 4px solid #4facfe;
+        }
+
+        .explanation h3 {
+            margin-bottom: 1rem;
+            font-size: 1.3rem;
+        }
+
+        .explanation p {
+            line-height: 1.8;
+            font-size: 1.05rem;
+        }
+
+        .formula {
+            background: rgba(0,0,0,0.3);
+            padding: 1.5rem;
+            border-radius: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 1.1rem;
+            margin: 1rem 0;
+            overflow-x: auto;
+        }
+
+        .controls {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1rem;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 1rem 2rem;
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            border: none;
+            border-radius: 10px;
+            color: white;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+        }
+
+        .legend {
+            display: flex;
+            gap: 2rem;
+            justify-content: center;
+            margin-top: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .legend-color {
+            width: 30px;
+            height: 30px;
+            border-radius: 5px;
+        }
+
+        .code-section {
+            background: rgba(0,0,0,0.3);
+            padding: 1.5rem;
+            border-radius: 10px;
+            margin-top: 1rem;
+        }
+
+        .code-section pre {
+            overflow-x: auto;
+            font-size: 0.95rem;
+            line-height: 1.6;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .animating {
+            animation: pulse 1s ease-in-out infinite;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧠 Interactive Self-Attention Mechanism</h1>
+        <p class="subtitle">Visualize how transformers pay attention to different words</p>
+
+        <div class="demo-section">
+            <div class="input-section">
+                <label for="sentence">Enter a sentence:</label>
+                <input type="text" id="sentence" value="The cat sat on the mat" placeholder="Type your sentence here...">
+            </div>
+
+            <div class="controls">
+                <button onclick="updateTokens()">Update Tokens</button>
+                <button onclick="computeAttention()">Compute Attention</button>
+                <button onclick="showCausalMask()">Show Causal Mask</button>
+                <button onclick="resetDemo()">Reset</button>
+            </div>
+
+            <div class="tokens-display" id="tokensDisplay"></div>
+
+            <div class="attention-matrix" id="attentionMatrix"></div>
+
+            <div class="legend">
+                <div class="legend-item">
+                    <div class="legend-color" style="background: linear-gradient(to right, rgba(74, 144, 226, 0.2), rgba(74, 144, 226, 1));"></div>
+                    <span>Low → High Attention</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="demo-section">
+            <h2>📚 How Self-Attention Works</h2>
+            
+            <div class="explanation">
+                <h3>Step 1: Create Query, Key, Value</h3>
+                <p>Each word is transformed into three vectors:</p>
+                <div class="formula">
+Q (Query) = X · W_Q   "What am I looking for?"
+K (Key)   = X · W_K   "What do I contain?"
+V (Value) = X · W_V   "What information do I provide?"
+                </div>
+            </div>
+
+            <div class="explanation">
+                <h3>Step 2: Compute Attention Scores</h3>
+                <p>Calculate similarity between queries and keys:</p>
+                <div class="formula">
+Score = Q · K^T / √d_k
+
+Example: "cat" looking at "sat"
+Score(cat→sat) = dot_product(Q_cat, K_sat) / √64
+                </div>
+            </div>
+
+            <div class="explanation">
+                <h3>Step 3: Apply Softmax</h3>
+                <p>Convert scores to probabilities (attention weights):</p>
+                <div class="formula">
+Attention_weights = softmax(Scores)
+
+For "cat": [0.1, 0.05, 0.6, 0.15, 0.05, 0.05]
+         (The  cat   sat  on   the  mat)
+         
+"cat" pays most attention to "sat" (60%)
+                </div>
+            </div>
+
+            <div class="explanation">
+                <h3>Step 4: Weighted Sum of Values</h3>
+                <p>Create context-aware representation:</p>
+                <div class="formula">
+Output = Σ (attention_weight_i × Value_i)
+
+cat_new = 0.1×V_the + 0.05×V_cat + 0.6×V_sat + ...
+
+Result: "cat" now contains information about "sat"!
+                </div>
+            </div>
+        </div>
+
+        <div class="demo-section">
+            <h2>🎯 Interactive Exercise</h2>
+            <div class="explanation">
+                <h3>Try This:</h3>
+                <p><strong>1.</strong> Enter: "The quick brown fox jumps"</p>
+                <p style="margin-top: 0.5rem;"><strong>2.</strong> Click "Compute Attention"</p>
+                <p style="margin-top: 0.5rem;"><strong>3.</strong> Click on "fox" - Which words does it attend to most?</p>
+                <p style="margin-top: 1rem;"><strong>Expected:</strong> "fox" should pay attention to "brown" (its descriptor) and "jumps" (its action)</p>
+            </div>
+        </div>
+
+        <div class="demo-section">
+            <h2>🔐 Causal vs Bidirectional Attention</h2>
+            <div class="code-section">
+                <pre>
+<strong>Bidirectional (BERT):</strong> Each word can see ALL words
+   "The cat sat" → cat sees: The, cat, sat ✓
+
+<strong>Causal (GPT):</strong> Each word can only see PREVIOUS words
+   "The cat sat" → cat sees: The, cat ✓  (cannot see "sat")
+                    sat sees: The, cat, sat ✓
+
+Why? For text generation, we predict NEXT word.
+Can't let the model "peek" at future words!
+                </pre>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let tokens = [];
+        let selectedToken = null;
+        let attentionMode = 'bidirectional';
+
+        function updateTokens() {
+            const sentence = document.getElementById('sentence').value;
+            tokens = sentence.toLowerCase().split(' ').filter(t => t.length > 0);
+            
+            const display = document.getElementById('tokensDisplay');
+            display.innerHTML = '';
+            
+            tokens.forEach((token, idx) => {
+                const tokenEl = document.createElement('div');
+                tokenEl.className = 'token';
+                tokenEl.textContent = token;
+                tokenEl.onclick = () => selectToken(idx);
+                display.appendChild(tokenEl);
+            });
+        }
+
+        function selectToken(idx) {
+            selectedToken = idx;
+            updateTokenDisplay();
+            if (document.getElementById('attentionMatrix').children.length > 0) {
+                highlightAttention();
+            }
+        }
+
+        function updateTokenDisplay() {
+            const tokenEls = document.querySelectorAll('.token');
+            tokenEls.forEach((el, idx) => {
+                el.classList.toggle('selected', idx === selectedToken);
+            });
+        }
+
+        function computeAttention() {
+            if (tokens.length === 0) updateTokens();
+            
+            // Simulate attention scores (in real transformer, these come from Q·K^T)
+            const matrix = [];
+            for (let i = 0; i < tokens.length; i++) {
+                const row = [];
+                for (let j = 0; j < tokens.length; j++) {
+                    if (attentionMode === 'causal' && j > i) {
+                        row.push(0);
+                    } else {
+                        // Simulate higher attention to adjacent words
+                        const distance = Math.abs(i - j);
+                        const base = distance === 0 ? 0.5 : 0.3 / (distance + 1);
+                        row.push(base + Math.random() * 0.2);
+                    }
+                }
+                // Normalize (softmax approximation)
+                const sum = row.reduce((a, b) => a + b, 0);
+                matrix.push(row.map(v => v / sum));
+            }
+            
+            displayAttentionMatrix(matrix);
+        }
+
+        function displayAttentionMatrix(matrix) {
+            const container = document.getElementById('attentionMatrix');
+            container.innerHTML = '';
+            container.style.gridTemplateColumns = `repeat(${tokens.length}, 60px)`;
+            
+            matrix.forEach((row, i) => {
+                row.forEach((score, j) => {
+                    const cell = document.createElement('div');
+                    cell.className = 'attention-cell';
+                    
+                    const intensity = score;
+                    const color = attentionMode === 'causal' && j > i 
+                        ? 'rgba(100, 100, 100, 0.3)' 
+                        : `rgba(74, 144, 226, ${intensity})`;
+                    
+                    cell.style.background = color;
+                    cell.textContent = (score * 100).toFixed(0) + '%';
+                    cell.title = `${tokens[i]} → ${tokens[j]}: ${(score * 100).toFixed(1)}%`;
+                    
+                    cell.onclick = () => {
+                        selectedToken = i;
+                        updateTokenDisplay();
+                        highlightAttention();
+                    };
+                    
+                    container.appendChild(cell);
+                });
+            });
+        }
+
+        function highlightAttention() {
+            const cells = document.querySelectorAll('.attention-cell');
+            const rowSize = tokens.length;
+            
+            cells.forEach((cell, idx) => {
+                const row = Math.floor(idx / rowSize);
+                cell.style.border = row === selectedToken 
+                    ? '3px solid #4facfe' 
+                    : '1px solid rgba(255,255,255,0.1)';
+            });
+        }
+
+        function showCausalMask() {
+            attentionMode = 'causal';
+            computeAttention();
+        }
+
+        function resetDemo() {
+            attentionMode = 'bidirectional';
+            selectedToken = null;
+            updateTokens();
+            document.getElementById('attentionMatrix').innerHTML = '';
+        }
+
+        // Initialize
+        updateTokens();
+    </script>
+</body>
+</html>
