@@ -4,13 +4,22 @@ Welcome to the most comprehensive Python Object-Oriented Programming masterclass
 
 ## Overview
 
-This masterclass contains **8 comprehensive modules** covering everything from OOP fundamentals to production-ready system design. Each module includes theory, practical examples, mermaid diagrams, best practices, and interview questions.
+This masterclass contains **two parallel learning tracks** with **20+ comprehensive modules** covering everything from OOP fundamentals to production-ready AI systems. Each module includes theory, practical examples, mermaid diagrams, best practices, and interview questions.
+
+| Track | Focus | Modules |
+|-------|-------|---------|
+| **Core OOP Track** | Traditional OOP fundamentals | 01-08 |
+| **AI/LLM Application Track** | Building production AI systems | 01-11 (AI-focused) |
 
 ## Quick Start
 
 **Start Here:** [00-ROADMAP.md](./00-ROADMAP.md) - Complete learning path and curriculum overview
 
-## Course Structure
+---
+
+# 🎯 Core OOP Track
+
+*Master OOP fundamentals with traditional software engineering examples*
 
 ### Foundation Phase (Weeks 1-2)
 
@@ -174,6 +183,213 @@ Complete production systems:
 - WebSocket handling
 - Pipeline architecture
 - System design interviews
+
+---
+
+# 🤖 AI/LLM Application Track
+
+*Learn OOP by building production AI applications*
+
+### Foundation Phase (AI Context)
+
+#### [Module 01: OOP Fundamentals with LLM Clients](./01-oop-fundamentals-llm-clients.md)
+**Level:** Beginner | **Time:** 10-12 hours
+
+Learn OOP by building real LLM clients:
+- Classes and Objects (ChatMessage, LLMClient)
+- The `__init__` constructor
+- Instance vs Class attributes
+- Instance, Class, and Static methods
+- Properties and encapsulation
+- Special methods for AI objects
+
+---
+
+#### [Module 02: OOP Principles with Multi-Provider](./02-oop-principles-multi-provider.md)
+**Level:** Intermediate | **Time:** 10-12 hours
+
+Master OOP pillars through provider abstraction:
+- Encapsulation (API key handling)
+- Inheritance (base LLM client)
+- Polymorphism (provider switching)
+- Abstraction (unified interfaces)
+
+---
+
+#### [Module 03: Advanced OOP for Agent Architecture](./03-advanced-oop-agent-architecture.md)
+**Level:** Advanced | **Time:** 12-15 hours
+
+Advanced concepts for AI agents:
+- Metaclasses for tool registration
+- Descriptors for prompt management
+- Protocols for agent interfaces
+- Context managers for conversations
+
+---
+
+### Modern Python for AI (Weeks 3-4)
+
+#### [Module 04: Modern Python for AI Features](./04-modern-python-ai-features.md)
+**Level:** Intermediate-Advanced | **Time:** 10-12 hours
+
+Modern Python patterns for AI:
+- ParamSpec for decorator type safety
+- Pydantic for LLM response validation
+- Async/await for concurrent API calls
+- Pattern matching for tool routing
+
+---
+
+#### [Module 05: Design Patterns for AI](./05-design-patterns-ai.md)
+**Level:** Intermediate-Advanced | **Time:** 15-20 hours
+
+Patterns specifically for AI applications:
+- Strategy (provider switching)
+- Factory (client creation)
+- Chain of Responsibility (agent pipelines)
+- Observer (event streaming)
+
+---
+
+#### [Module 06: SOLID & Clean Architecture for AI](./06-solid-clean-architecture-ai.md)
+**Level:** Advanced | **Time:** 12-15 hours
+
+Clean architecture for AI systems:
+- SOLID principles in LLM applications
+- Hexagonal architecture for AI
+- Domain-driven design for agents
+
+---
+
+### FastAPI & Backend (Weeks 5-6)
+
+#### [Module 07a: FastAPI Fundamentals](./07a-fastapi-fundamentals.md)
+**Level:** Beginner-Intermediate | **Time:** 10-12 hours
+
+Build AI APIs with FastAPI:
+- ASGI and async endpoints
+- Pydantic request/response models
+- Dependency injection
+- Error handling patterns
+- Lifespan management
+
+---
+
+#### [Module 07b: FastAPI Advanced](./07b-fastapi-advanced.md)
+**Level:** Advanced | **Time:** 12-15 hours
+
+Advanced API patterns:
+- Streaming SSE for LLM responses
+- Background tasks
+- Middleware and authentication
+- Rate limiting
+
+---
+
+### Database Deep Dives (Weeks 7-9)
+
+#### [Module 08a: PostgreSQL + SQLAlchemy](./08a-postgresql-sqlalchemy.md)
+**Level:** Intermediate-Advanced | **Time:** 12-15 hours
+
+Relational databases for AI apps:
+- SQLAlchemy 2.0 async patterns
+- Repository and Unit of Work
+- Alembic migrations
+- Storing conversations and users
+
+---
+
+#### [Module 08b: MongoDB Deep Dive](./08b-mongodb-deep-dive.md)
+**Level:** Intermediate-Advanced | **Time:** 12-15 hours
+
+Document databases for AI:
+- Motor async driver
+- Schema design for conversations
+- Aggregation pipelines
+- GridFS for large data
+
+---
+
+#### [Module 08c: Weaviate Vector Search](./08c-weaviate-vector-search.md)
+**Level:** Intermediate-Advanced | **Time:** 10-12 hours
+
+Vector databases for RAG:
+- Embedding strategies
+- Hybrid search (keyword + vector)
+- Schema design
+- Multi-tenancy
+
+---
+
+#### [Module 08d: Redis Patterns](./08d-redis-patterns.md)
+**Level:** Intermediate | **Time:** 8-10 hours
+
+Caching and real-time patterns:
+- Caching LLM responses
+- Rate limiting
+- Session management
+- Pub/Sub for agents
+
+---
+
+### LLM Services (Weeks 10-11)
+
+#### [Module 09a: Multi-Provider LLM Service](./09a-multi-provider-llm-service.md)
+**Level:** Intermediate-Advanced | **Time:** 10-12 hours
+
+Production LLM abstraction:
+- Strategy pattern for providers (OpenAI, Anthropic, Ollama)
+- Factory for dynamic creation
+- Streaming response handling
+- Fallback and retry logic
+
+---
+
+#### [Module 09b: Agentic Patterns](./09b-agentic-patterns.md)
+**Level:** Advanced | **Time:** 12-15 hours
+
+Building intelligent agents:
+- Tool calling patterns
+- ReAct reasoning loops
+- Multi-step planning
+- Memory management
+
+---
+
+### Testing & Production (Week 12)
+
+#### [Module 10: Testing & Production](./10-testing-production.md)
+**Level:** Advanced | **Time:** 10-12 hours
+
+Production-ready AI systems:
+- Testing LLM applications
+- Mocking API responses
+- Logging and observability
+- Rate limiting and cost tracking
+
+---
+
+### Capstone Projects (Weeks 13-16)
+
+#### [Module 11a: RAG System (Capstone)](./11a-rag-system.md)
+**Level:** Advanced | **Time:** 15-20 hours
+
+Build a complete RAG system:
+- Clean architecture
+- Document ingestion pipeline
+- Vector search integration
+- Query and generation
+
+---
+
+#### [Module 11b: Production Agent (Capstone)](./11b-production-agent.md)
+**Level:** Expert | **Time:** 15-20 hours
+
+Build a production-ready agent:
+- Multi-tool agent architecture
+- Conversation memory
+- Production deployment
+- Monitoring and observability
 
 ---
 
@@ -446,6 +662,8 @@ Start your journey to becoming a senior staff engineer:
 
 ## Quick Reference
 
+### Core OOP Track
+
 | Need | Go To |
 |------|-------|
 | Learning path | [00-ROADMAP.md](./00-ROADMAP.md) |
@@ -457,15 +675,37 @@ Start your journey to becoming a senior staff engineer:
 | Architecture | [06-solid-clean-architecture.md](./06-solid-clean-architecture.md) |
 | Production code | [07-backend-testing-production.md](./07-backend-testing-production.md) |
 | Real projects | [08-real-world-applications.md](./08-real-world-applications.md) |
-| Project instructions | [CLAUDE.md](./CLAUDE.md) |
+
+### AI/LLM Application Track
+
+| Need | Go To |
+|------|-------|
+| OOP with LLM examples | [01-oop-fundamentals-llm-clients.md](./01-oop-fundamentals-llm-clients.md) |
+| Multi-provider patterns | [02-oop-principles-multi-provider.md](./02-oop-principles-multi-provider.md) |
+| Agent architecture | [03-advanced-oop-agent-architecture.md](./03-advanced-oop-agent-architecture.md) |
+| Modern Python for AI | [04-modern-python-ai-features.md](./04-modern-python-ai-features.md) |
+| AI design patterns | [05-design-patterns-ai.md](./05-design-patterns-ai.md) |
+| Clean architecture AI | [06-solid-clean-architecture-ai.md](./06-solid-clean-architecture-ai.md) |
+| FastAPI fundamentals | [07a-fastapi-fundamentals.md](./07a-fastapi-fundamentals.md) |
+| FastAPI advanced | [07b-fastapi-advanced.md](./07b-fastapi-advanced.md) |
+| PostgreSQL/SQLAlchemy | [08a-postgresql-sqlalchemy.md](./08a-postgresql-sqlalchemy.md) |
+| MongoDB | [08b-mongodb-deep-dive.md](./08b-mongodb-deep-dive.md) |
+| Weaviate vectors | [08c-weaviate-vector-search.md](./08c-weaviate-vector-search.md) |
+| Redis patterns | [08d-redis-patterns.md](./08d-redis-patterns.md) |
+| Multi-provider LLM | [09a-multi-provider-llm-service.md](./09a-multi-provider-llm-service.md) |
+| Agentic patterns | [09b-agentic-patterns.md](./09b-agentic-patterns.md) |
+| Testing & production | [10-testing-production.md](./10-testing-production.md) |
+| RAG system | [11a-rag-system.md](./11a-rag-system.md) |
+| Production agent | [11b-production-agent.md](./11b-production-agent.md) |
 
 ---
 
-**Last Updated:** November 2025
-**Version:** 1.0
-**Total Learning Time:** 100-150 hours
-**Modules:** 8 comprehensive guides
-**Lines of Code:** 5000+ examples
-**Interview Questions:** 100+
-**Design Patterns:** All 23 GoF patterns
-**Real-World Projects:** 5+ complete systems
+**Last Updated:** December 2025
+**Version:** 2.0
+**Total Learning Time:** 200-300 hours
+**Modules:** 25+ comprehensive guides (2 tracks)
+**Lines of Code:** 10000+ examples
+**Interview Questions:** 200+
+**Design Patterns:** All 23 GoF patterns + AI-specific patterns
+**Real-World Projects:** RAG system, Production Agent, and more
+
