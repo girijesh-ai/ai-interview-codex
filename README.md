@@ -241,6 +241,10 @@ This repository contains battle-tested interview preparation materials for ML/AI
 - **[Technical Cheatsheet](technical-cheatsheet.md)** - Quick reference
 - **[Leadership Stories Template](leadership-stories-template.md)** - STAR method examples
 
+### Related Learning Series
+
+- **[LangChain Learning Series](https://github.com/girijesh-ai/langchain-learning-series)** - Comprehensive 8-module course on LangChain from fundamentals to production deployment (separate repository)
+
 ## Study Plans
 
 ### 4-Week Complete Preparation
