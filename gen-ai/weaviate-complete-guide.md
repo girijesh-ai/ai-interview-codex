@@ -262,7 +262,7 @@ graph TB
 version: '3.4'
 services:
   weaviate:
-    image: cr.weaviate.io/semitechnologies/weaviate:1.27.1
+    image: cr.weaviate.io/semitechnologies/weaviate:1.39.13
     ports:
       - "8080:8080"
       - "50051:50051"  # gRPC (required for v4 client)

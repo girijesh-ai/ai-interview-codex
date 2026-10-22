@@ -133,7 +133,7 @@ services:
     restart: unless-stopped
 
   weaviate:
-    image: semitechnologies/weaviate:1.23.0
+    image: semitechnologies/weaviate:1.39.13
     container_name: agent-weaviate
     ports:
       - "8080:8080"
